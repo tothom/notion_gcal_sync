@@ -17,7 +17,7 @@ def read_response(response, title="Title", description="Description", date="Date
                             for a in response['properties'][title]['title']]),
         'description': ', '.join([a.get('plain_text', '')
                                   for a in response['properties'][description]['rich_text']]),
-        'date': response['properties'][date]['date'],
+        'date': response['properties'].get(date, {}).get('date'),
         'archived': response['archived'],
         'source': 'notion',
         'updated': response['last_edited_time'],

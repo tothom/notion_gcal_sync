@@ -3,7 +3,7 @@ import dateutil
 import uuid
 from pprint import pprint
 
-from . import table_utils, notion, gcal
+from . import registry, notion, gcal
 
 import logging
 
@@ -17,7 +17,7 @@ def sync_event(event, table_dict, notion_client, gcal_client, config):
     table_id, table_entry = table_utils.find_table_entry(
         event['id'], table_dict)
 
-    # table_update = None
+    # update = None
 
     if not table_id and not event['archived']:
         action = 'NEW'
@@ -30,7 +30,7 @@ def sync_event(event, table_dict, notion_client, gcal_client, config):
 
             new_event = gcal.read_response(response)
 
-            table_update = {
+            update = {
                 'updated': new_event['updated'],
                 'notion_id': event['id'],
                 'gcal_id': new_event['id'],
@@ -51,7 +51,7 @@ def sync_event(event, table_dict, notion_client, gcal_client, config):
             new_event = notion.read_response(
                 response, **config['notion']['keys'])
 
-            table_update = {
+            update = {
                 'updated': new_event['updated'],
                 'notion_id': new_event['id'],
                 'gcal_id': event['id'],
@@ -61,7 +61,7 @@ def sync_event(event, table_dict, notion_client, gcal_client, config):
             }
 
         table_id = str(uuid.uuid4())
-        table_dict['events'][table_id] = table_update
+        table_dict['events'][table_id] = update
 
     elif event['archived'] == True:
         action = 'DELETED'
@@ -88,12 +88,12 @@ def sync_event(event, table_dict, notion_client, gcal_client, config):
                 new_event = notion.read_response(
                     response, **config['notion']['keys'])
 
-        table_update = {
+        update = {
             'updated': event['updated'],
             'archived': True
         }
 
-        table_dict['events'][table_id].update(table_update)
+        table_dict['events'][table_id].update(update)
 
     # print()
 
@@ -123,11 +123,11 @@ def sync_event(event, table_dict, notion_client, gcal_client, config):
                 new_event = notion.read_response(
                     response, **config['notion']['keys'])
 
-        table_update = {
+        update = {
             'updated': event['updated'],
             'title': event['title']
         }
-        table_dict['events'][table_id].update(table_update)
+        table_dict['events'][table_id].update(update)
 
     else:
         action = None
@@ -136,12 +136,12 @@ def sync_event(event, table_dict, notion_client, gcal_client, config):
 
     return action
 
-def fetch_events(table, config, notion_client, gcal_client):
+def fetch_events(registry, config, notion_client, gcal_client):
     logger.info('Fetching events from sources')
 
-    if table['last_checked']:
-        notion_query = notion.get_updates_query(config, table['last_checked'])
-        gcal_query = gcal.get_updates_query(config, table['last_checked'])
+    if registry.last_checked:
+        notion_query = notion.get_updates_query(config, registry.last_checked)
+        gcal_query = gcal.get_updates_query(config, registry.last_checked)
     else:
         notion_query = notion.get_init_query(config, datetime_min)
         gcal_query = gcal.get_init_query(config, datetime_min)
@@ -159,14 +159,17 @@ def fetch_events(table, config, notion_client, gcal_client):
     return notion_events + gcal_events
 
 
-def check_for_new_event(event, table, notion_client, gcal_client, config):
+def check_for_new_event(event, registry, notion_client, gcal_client, config):
     logger.info(f"Checking if new: event {event['id']} {event['title']}.")
 
-    entry_id, entry = table_utils.find_table_entry(event['id'], table)
+    entry_id, entry = registry.find_table_entry(event['id'])
 
     # logger.info(f"Found event {entry.get('id')} in table")
 
     logger.debug(entry)
+
+    if not event['date']:
+        return
 
     if not entry_id:
         action = 'NEW'
@@ -181,8 +184,8 @@ def check_for_new_event(event, table, notion_client, gcal_client, config):
 
             new_event = gcal.read_response(response)
 
-            table_update = {
-                'updated': new_event['updated'],
+            update = {
+                'updated': datetime.datetime.now().isoformat() + 'Z',
                 'notion_id': event['id'],
                 'gcal_id': new_event['id'],
                 'title': new_event['title'],
@@ -203,8 +206,8 @@ def check_for_new_event(event, table, notion_client, gcal_client, config):
             new_event = notion.read_response(
                 response, **config['notion']['keys'])
 
-            table_update = {
-                'updated': new_event['updated'],
+            update = {
+                'updated': datetime.datetime.now().isoformat() + 'Z',
                 'notion_id': new_event['id'],
                 'gcal_id': event['id'],
                 'title': new_event['title'],
@@ -213,12 +216,12 @@ def check_for_new_event(event, table, notion_client, gcal_client, config):
             }
 
         table_id = str(uuid.uuid4())
-        table['events'][table_id] = table_update
+        registry.events[table_id] = update
     else:
         logger.info(f"Event is not new. Already in Registry.")
         action = None
 
-    return action#, table_update
+    return action#, update
 
 def check_for_changes(entry_id, entry, notion_client, gcal_client, config):
     logger.info(f"Checking event {entry_id} '{entry['title']}' for changes.")
@@ -231,6 +234,7 @@ def check_for_changes(entry_id, entry, notion_client, gcal_client, config):
         logger.info(f"{type(e)}: {e}")
         notion_event = {}
     else:
+        logger.debug(response)
         notion_event = notion.read_response(response, **config['notion']['keys'])
 
     # get_gcal_event
@@ -246,15 +250,17 @@ def check_for_changes(entry_id, entry, notion_client, gcal_client, config):
         gcal_event = gcal.read_response(response)
 
     logger.debug(entry)
-    # print(notion_event)
-    # print(gcal_event)
+    logger.debug(notion_event)
+    logger.debug(gcal_event)
 
     # if not notion_event and not gcal_event:
     #     action = 'DELETED'
 
-    if not notion_event or not gcal_event or notion_event.get('archived') or gcal_event.get('archived'):
+    if not notion_event or not gcal_event \
+        or notion_event.get('archived') or gcal_event.get('archived') \
+        or not notion_event.get('date'):
         action = 'DELETED'
-        if not notion_event or notion_event.get('archived'):
+        if not notion_event or notion_event.get('archived') or not notion_event.get('date'):
             try:
                 request = gcal_client.events().delete(
                     calendarId=config['gcal']['id'],
@@ -280,12 +286,12 @@ def check_for_changes(entry_id, entry, notion_client, gcal_client, config):
                 # new_event = notion.read_response(
                 #     response, **config['notion']['keys'])
 
-        table_update = {
+        update = {
             'updated': datetime.datetime.utcnow().isoformat() + 'Z',
             'archived': True
         }
 
-        # table['events'][table_id].update(table_update)
+        # table['events'][table_id].update(update)
 
 
     # elif dateutil.parser.parse(notion_event['updated']) > dateutil.parser.parse(entry['updated']) or
@@ -318,19 +324,19 @@ def check_for_changes(entry_id, entry, notion_client, gcal_client, config):
                 new_event = notion.read_response(
                     response, **config['notion']['keys'])
 
-        table_update = {
+        update = {
             'updated': datetime.datetime.utcnow().isoformat() + 'Z',
             'title': new_event['title']
         }
 
     else:
         action = None
-        table_update = {}
-        # table['events'][table_id].update(table_update)
+        update = {}
+        # table['events'][table_id].update(update)
 
     logger.info(f"Event action: {action}")
 
-    return action, table_update
+    return action, update
 
 def check_for_deletion(entry_id, entry, notion_client, gcal_client, config):
     try:
