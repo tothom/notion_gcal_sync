@@ -48,10 +48,13 @@ def save_table(table, config):
 
 
 def find_table_entry(search_id, table):
+    logger.info(f"SEARCHING for id '{search_id}' in Registry.")
     for entry_id, entry in table['events'].items():
         if search_id in [entry['notion_id'], entry['gcal_id']]:
+            logger.info(f"FOUND event with id '{entry_id}.'")
             return entry_id, entry
 
+    logger.info(f"Id NOT FOUND in Registry.")
     return None, {}
 
 # def add_table_entry(event):

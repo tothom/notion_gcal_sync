@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def sync_event(event, table_dict, notion_client, gcal_client, config):
     """"""
-    print(f"Checking event {event}...")
+    logger.info(f"Checking event {event}...")
 
     table_id, table_entry = table_utils.find_table_entry(
         event['id'], table_dict)
@@ -132,7 +132,7 @@ def sync_event(event, table_dict, notion_client, gcal_client, config):
     else:
         action = None
 
-    print(f"{action} event...\n")
+    logger.info(f"{action} event...\n")
 
     return action
 
@@ -160,17 +160,17 @@ def fetch_events(table, config, notion_client, gcal_client):
 
 
 def check_for_new_event(event, table, notion_client, gcal_client, config):
-    logger.info(f"Checking if event {event['id']} {event['title']} is new.")
+    logger.info(f"Checking if new: event {event['id']} {event['title']}.")
+
     entry_id, entry = table_utils.find_table_entry(event['id'], table)
 
-    logger.info(f"Found event {entry.get('id')} in table")
+    # logger.info(f"Found event {entry.get('id')} in table")
 
-    if not entry_id:
-        return
-    print(entry)
+    logger.debug(entry)
 
     if not entry_id:
         action = 'NEW'
+        logger.info(f"Event is NEW. Sync between sources.")
         if event['source'] == 'notion':
             logger.info("Inserting event into Google Calendar")
             request = gcal_client.events().insert(
@@ -215,6 +215,7 @@ def check_for_new_event(event, table, notion_client, gcal_client, config):
         table_id = str(uuid.uuid4())
         table['events'][table_id] = table_update
     else:
+        logger.info(f"Event is not new. Already in Registry.")
         action = None
 
     return action#, table_update
@@ -291,23 +292,25 @@ def check_for_changes(entry_id, entry, notion_client, gcal_client, config):
     #  dateutil.parser.parse(gcal_event['updated']) > dateutil.parser.parse(entry['updated']):
     elif notion_event['updated'] > entry['updated'] or gcal_event['updated'] > entry['updated']:
         action = 'MODIFIED'
-        if notion_event['updated'] > entry['updated']:
+
+        if notion_event['updated'] > gcal_event['updated']:
+
             request = gcal_client.events().update(
                 calendarId=config['gcal']['id'],
-                eventId=event['gcal_id'],
-                body=gcal.prepare_properties(properties)
+                eventId=entry['gcal_id'],
+                body=gcal.prepare_properties(notion_event)
             )
 
             response = request.execute()
 
             new_event = gcal.read_response(response)
 
-        elif gcal_event['updated'] > entry['updated']:
+        elif gcal_event['updated'] > notion_event['updated']:
             try:
                 response = notion_client.pages.update(
-                    page_id=event['notion_id'],
+                    page_id=entry['notion_id'],
                     properties=notion.prepare_properties(
-                        properties, **config['notion']['keys'])
+                        gcal_event, **config['notion']['keys'])
                 )
             except Exception as e:
                 logger.info(f"{type(e)}: {e}")
@@ -316,8 +319,8 @@ def check_for_changes(entry_id, entry, notion_client, gcal_client, config):
                     response, **config['notion']['keys'])
 
         table_update = {
-            'updated': event['updated'],
-            'title': event['title']
+            'updated': datetime.datetime.utcnow().isoformat() + 'Z',
+            'title': new_event['title']
         }
 
     else:
@@ -346,7 +349,7 @@ def check_for_deletion(entry_id, entry, notion_client, gcal_client, config):
             except Exception as e:
                 logger.info(f"{type(e)}: {e}")
             else:
-                print(f"DELETED")
+                logger.info(f"DELETED")
                 return entry_id
 
     try:
@@ -367,5 +370,5 @@ def check_for_deletion(entry_id, entry, notion_client, gcal_client, config):
             except Exception as e:
                 logger.info(f"{type(e)}: {e}")
             else:
-                print(f"DELETED")
+                logger.info(f"DELETED")
                 return entry_id
