@@ -62,13 +62,22 @@ class Registry():
             self.remove_event(event_id)
         self.pending_deletions = []
 
-    def check_for_new_events(self):
+    def fetch_updated_events(self):
         events = []
         for source in self.sources:
             response = source.list_updated(self.last_checked)
             events.extend(response)
 
         return events
+
+    def check_event_is_new(self, event):
+        entry_id, entry = self.find_table_entry(event['id'])
+
+        if not entry_id:
+            other_
+
+
+
 
     # def load_sources(self):
     #     for source in self.config['sources']:

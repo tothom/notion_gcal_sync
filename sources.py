@@ -20,6 +20,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class Source():
     """docstring for Source."""
 
@@ -41,25 +42,10 @@ class Source():
         return {}
 
     def _get_init_query(config, datetime_min):
-        return {
-            'filter': {
-                'property': self.keys['date'],
-                'date': {
-                    'on_or_after': datetime_min
-                }
-            }
-        }
-
+        return {}
 
     def _get_updates_query(config, last_edited):
-        return {
-            'filter': {
-                'property': self.keys['last_edited_time'],
-                'last_edited_time': {
-                    'on_or_after': last_edited
-                }
-            }
-        }
+        return {}
 
     def list_updated(self, last_edited):
         query = self._get_updates_query(last_edited)
@@ -72,23 +58,30 @@ class Source():
 
     def list(self, query):
         try:
-            response = self.client.databases.list(
-                database_id=self.id,
-                **query
-            )
+            response = self._list(query)
         except Exception as e:
             logger.info(f"{type(e)}: {e}")
             response = {}
         else:
             logger.debug(response)
 
-        return response['results']
+        return response
 
     def get(self, id):
         try:
-            response = self.client.pages.retrieve(
-                page_id=id
-            )
+            response = self._get(if)
+        except Exception as e:
+            logger.info(f"{type(e)}: {e}")
+            event = {}
+        else:
+            logger.debug(response)
+            event = self.read_response(response)
+
+        return event
+
+    def create(self, properties):
+        try:
+            response = self._create(properties)
         except Exception as e:
             logger.info(f"{type(e)}: {e}")
             event = {}
@@ -100,10 +93,7 @@ class Source():
 
     def update(self, id, properties):
         try:
-            response = self.client.pages.update(
-                page_id=id,
-                properties=self.prepare_properties(properties)
-            )
+            response = self._update(id, properties)
         except Exception as e:
             logger.info(f"{type(e)}: {e}")
             event = {}
@@ -111,13 +101,9 @@ class Source():
             logger.debug(response)
             event = self.read_response(response)
 
-
     def delete(self, id):
         try:
-            response = self.client.pages.update(
-                page_id=id,
-                archived=True
-            )
+            response = self._delete(id)
         except Exception as e:
             logger.info(f"{type(e)}: {e}")
             event = {}
@@ -194,74 +180,34 @@ class Notion(Source):
             }
         }
 
-    def list_updated(self, last_edited):
-        query = self._get_updates_query(last_edited)
-        return self.list(query)
+    def _list(self, query={}):
+        return self.client.databases.query(
+            database_id=self.id,
+            **query
+        )['results']
 
-    def list_since_datetime_min(self, datetime_min):
-        # if isinstance(datetime_min, datetime.datetime)
-        query = self._get_init_query(datetime_min)
-        return self.list(query)
+    def _get(self, id):
+        return = self.client.pages.retrieve(
+            page_id=id
+        )
 
-    def list(self, query={}):
-        logger.debug(query)
-
-        try:
-            response = self.client.databases.query(
-                database_id=self.id,
-                **query
+    def _create(self, properties):
+        return notion_client.pages.create(
+            parent={"database_id": self.id},
+            properties=notion.prepare_properties(properties)
             )
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            response = {}
-        else:
-            logger.debug(response)
 
-        return response['results']
+    def _update(self, id, properties):
+        return self.client.pages.update(
+            page_id=id,
+            properties=self.prepare_properties(properties)
+        )
 
-    def get(self, id):
-        try:
-            response = self.client.pages.retrieve(
-                page_id=id
-            )
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            event = {}
-        else:
-            logger.debug(response)
-            event = self.read_response(response)
-
-        return event
-
-    def update(self, id, properties):
-        try:
-            response = self.client.pages.update(
-                page_id=id,
-                properties=self.prepare_properties(properties)
-            )
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            event = {}
-        else:
-            logger.debug(response)
-            event = self.read_response(response)
-
-        return event
-
-    def delete(self, id):
-        try:
-            response = self.client.pages.update(
-                page_id=id,
-                archived=True
-            )
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            event = {}
-        else:
-            logger.debug(response)
-            event = self.read_response(response)
-
-        return event
+    def _delete(self, id):
+        return self.client.pages.update(
+            page_id=id,
+            archived=True
+        )
 
 
 class GCal(Source):
@@ -371,86 +317,33 @@ class GCal(Source):
             'orderBy': 'updated',
         }
 
-    def list_updated(self, last_edited):
-        query = self._get_updates_query(last_edited)
-        return self.list(query)
+    def _list(self, query={}):
+        return self.client.events().list(
+            calendarId=self.id,
+            **query
+        ).execute()['items']
 
-    def list_since_datetime_min(self, datetime_min):
-        # if isinstance(datetime_min, datetime.datetime)
-        query = self._get_init_query(datetime_min)
-        return self.list(query)
+    def _get(self, id):
+        return = self.client.events().get(
+            calendarId=self.id,
+            eventId=id
+        ).execute()
 
-    def list(self, query={}):
-        try:
-            response = self.client.events().list(
-                calendarId=self.id,
-                **query
-            ).execute()
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            response = {}
-        else:
-            logger.debug(response)
+    def _create(self, properties):
+        return self.client.events().insert(
+            calendarId=self.id,
+            body=self.prepare_properties(properties)
+        ).execute()
 
-        return response['items']
+    def _update(self, id, properties):
+        return self.client.events().update(
+            calendarId=self.id,
+            eventId=id,
+            body=self.prepare_properties(properties)
+        ).execute()
 
-    def get(self, id):
-        try:
-            response = self.client.events().get(
-                calendarId=self.id,
-                eventId=id
-            )
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            event = {}
-        else:
-            logger.debug(response)
-            event = self.read_response(response)
-
-        return event
-
-    def create(self, properties):
-        try:
-            response = self.client.events().insert(
-                calendarId=self.id,
-                body=self.prepare_properties(properties)
-            ).execute()
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            event = {}
-        else:
-            logger.debug(response)
-            event = self.read_response(response)
-
-        return event
-
-    def update(self, id, properties):
-        try:
-            response = self.client.events().update(
-                calendarId=self.id,
-                eventId=id,
-                body=self.prepare_properties(properties)
-            ).execute()
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            event = {}
-        else:
-            logger.debug(response)
-            event = self.read_response(response)
-
-        return event
-
-    def delete(self, id):
-        try:
-            response = self.client.events().delete(
-                calendarId=self.id,
-                eventId=id,
-            ).execute()
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
-            event = {}
-        else:
-            logger.debug(response)
-            event = self.read_response(response)
-
-        return event
+    def _delete(self, id):
+        return self.client.events().delete(
+            calendarId=self.id,
+            eventId=id,
+        ).execute()
