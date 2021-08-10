@@ -19,36 +19,43 @@ class Event():
         self.url = url
         self.archived = archived
 
+    @property
+    def properties(self):
+        return {
+            'title': self.title,
+            'start': self.start,
+            'end': self.end,
+            'description': self.description,
+            'archived': self.archived
+        }
+
+    # @classmethod
+    # def from_id_and_properties(cls, id, properties):
+    #     updated = properties['updated']
+    #     title = properties['title']
+    #     url = properties['url']
+    #
+    #     start = properties.get('start')
+    #     end = properties.get('end')
+    #
+    #     archived = properties.get('archived', False)
+    #
+    #     description = properties.get('description', '')
+    #
+    #     try:
+    #         source_ids = properties['source_ids']
+    #     except:
+    #         source_ids = {}
+    #         source_ids['notion'] = properties['notion_id']
+    #         source_ids['gcal'] = properties['gcal_id']
+    #
+    #
+    #     return cls(source_ids=source_ids, title=title, start=start, end=end,
+    #         description=description, url=url, updated=updated, id=id)
 
     @classmethod
-    def from_id_and_properties(cls, id, properties):
-        updated = properties['updated']
-        title = properties['title']
-        url = properties['url']
-
-        start = properties.get('start')
-        end = properties.get('end')
-
-        archived = properties.get('archived', False)
-
-        description = properties.get('description', '')
-
-        try:
-            source_ids = properties['source_ids']
-        except:
-            source_ids = {}
-            source_ids['notion'] = properties['notion_id']
-            source_ids['gcal'] = properties['gcal_id']
-        #
-        #
-        # try:
-        #     status = properties['status']
-        # except:
-        #     if properties['archived']:
-        #         status = 'deleted'
-
-        return cls(source_ids=source_ids, title=title, start=start, end=end,
-            description=description, url=url, updated=updated, id=id)
+    def from_dict(cls, d):
+        return cls(**d)
 
     def to_dict(self, d):
         return self.__dict__
@@ -57,8 +64,11 @@ class Event():
         self.source_ids[source_name] = source_id
 
     def update(self, delta):
+        pprint(delta)
         try:
             for source_name, source_id in delta.pop('source_ids').items():
                 self.add_source(source_name, source_id)
+        except:
+            pass
         finally:
             self.__dict__.update(delta)

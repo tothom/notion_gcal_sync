@@ -2,7 +2,9 @@
 from .event import Event
 
 import datetime
+import dateutil
 import os
+from pprint import pprint
 
 # Notion imports
 from notion_client import Client
@@ -81,6 +83,7 @@ class Source():
 
     def create(self, properties):
         try:
+            pprint(properties)
             response = self._create(properties)
         except Exception as e:
             logger.info(f"{type(e)}: {e}")
@@ -166,7 +169,10 @@ class Notion(Source):
                 }
                 ]
             },
-            self.keys['date']: {'date': properties['date']}
+            self.keys['date']: {'date': {
+                'start': properties['start'],
+                'end': properties['end']}
+            }
         }
 
     def _get_init_query(self, datetime_min):
@@ -201,10 +207,10 @@ class Notion(Source):
         )
 
     def _create(self, properties):
-        return notion_client.pages.create(
+        return self.client.pages.create(
             parent={"database_id": self.id},
-            properties=notion.prepare_properties(properties)
-            )
+            properties=self.prepare_properties(properties)
+        )
 
     def _update(self, id, properties):
         return self.client.pages.update(
@@ -256,24 +262,22 @@ class GCal(Source):
         self.client = build('calendar', 'v3', credentials=self.creds)
 
     def read_response(self, response, **kwargs):
+        # pprint(response)
         if not response.get('start'):
             start = None
             end = None
+        elif response['start'].get('date'):
+            start = response['start']['date']
+
+            dt_end = dateutil.parser.parse(response['end']['date'])
+            dt_end = dt_end - datetime.timedelta(days=1)
+            end = dt_end.strftime('%Y-%m-%d')
+
+            if start >= end:
+                end = None
         else:
-            try:
-                dt_start = dateutil.parser.parse(response['start']['date'])
-                start = dt_start.strftime('%Y-%m-%d')
-
-                dt_end = dateutil.parser.parse(response['end']['date'])
-                dt_end = dt_end - datetime.timedelta(days=1)
-
-                if dt_start >= dt_end:
-                    end = None
-                else:
-                    end = dt_end.strftime('%Y-%m-%d')
-            except:
-                start = response['start']['dateTime']
-                end = response['end']['dateTime']
+            start = response['start']['dateTime']
+            end = response['end']['dateTime']
 
             # date = {'start': start, 'end': end}
 
@@ -291,8 +295,8 @@ class GCal(Source):
 
     def prepare_properties(self, properties):
         # Notion and Google seem to interpret event lengths differently
-        start = properties['date']['start']
-        end = properties['date']['end']
+        start = properties['start']
+        end = properties['end']
 
         end = end or start  # End time cannot be empty
 
