@@ -59,11 +59,11 @@ def main():
     registry = Registry(sources)
 
     print(registry.file_name)
+    # logger.info(f"Registry loaded from {registry.file_name}")
 
+    # return
 
-    logger.info(f"Registry loaded from {registry.file_name}")
-
-    pprint(registry.check_for_new_events())
+    pprint(registry.fetch_updated_events())
 
     return
 

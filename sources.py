@@ -65,11 +65,11 @@ class Source():
         else:
             logger.debug(response)
 
-        return response
+        return [self.read_response(a) for a in response]
 
     def get(self, id):
         try:
-            response = self._get(if)
+            response = self._get(id)
         except Exception as e:
             logger.info(f"{type(e)}: {e}")
             event = {}
@@ -124,16 +124,25 @@ class Notion(Source):
         self.client = Client(auth=self.token)
 
     def read_response(self, response, **kwargs):
+        if response['properties'].get(self.keys['date']):
+            start = response['properties'][self.keys['date']]['date']['start']
+            end = response['properties'][self.keys['date']]['date']['end']
+        else:
+            start = None
+            end = None
+
         return {
             'title': ', '.join([a.get('plain_text', '')
                                 for a in response['properties'][self.keys['title']]['title']]),
             'description': ', '.join([a.get('plain_text', '')
                                       for a in response['properties'][self.keys['description']]['rich_text']]),
-            'date': response['properties'].get(self.keys['date'], {}).get('date'),
+            # 'date': response['properties'].get(self.keys['date'], {}).get('date'),
+            'start': start,
+            'end': end,
             'archived': response['archived'],
-            'source': self.name,
+            'source_ids': {self.name: response['id']},
             'updated': response['last_edited_time'],
-            'id': response['id'],
+            # 'id': ,
             'url': response['url']
         }
 
@@ -187,7 +196,7 @@ class Notion(Source):
         )['results']
 
     def _get(self, id):
-        return = self.client.pages.retrieve(
+        return self.client.pages.retrieve(
             page_id=id
         )
 
@@ -248,33 +257,36 @@ class GCal(Source):
 
     def read_response(self, response, **kwargs):
         if not response.get('start'):
-            return {'start': None, 'end': None}
+            start = None
+            end = None
+        else:
+            try:
+                dt_start = dateutil.parser.parse(response['start']['date'])
+                start = dt_start.strftime('%Y-%m-%d')
 
-        try:
-            dt_start = dateutil.parser.parse(response['start']['date'])
-            start = dt_start.strftime('%Y-%m-%d')
+                dt_end = dateutil.parser.parse(response['end']['date'])
+                dt_end = dt_end - datetime.timedelta(days=1)
 
-            dt_end = dateutil.parser.parse(response['end']['date'])
-            dt_end = dt_end - datetime.timedelta(days=1)
+                if dt_start >= dt_end:
+                    end = None
+                else:
+                    end = dt_end.strftime('%Y-%m-%d')
+            except:
+                start = response['start']['dateTime']
+                end = response['end']['dateTime']
 
-            if dt_start >= dt_end:
-                end = None
-            else:
-                end = dt_end.strftime('%Y-%m-%d')
-        except:
-            start = response['start']['dateTime']
-            end = response['end']['dateTime']
-
-        date = {'start': start, 'end': end}
+            # date = {'start': start, 'end': end}
 
         return {
             'title': response.get('summary', ''),
             'description': response.get('description', ''),
-            'date': date,
+            # 'date': date,
             'archived': response['status'] == 'cancelled',
-            'source': 'gcal',
+            'source_ids': {self.name: response['id']},
             'updated': response.get('updated'),
-            'id': response['id']
+            'start': start,
+            'end': end
+            # 'id': response['id']
         }
 
     def prepare_properties(self, properties):
@@ -324,7 +336,7 @@ class GCal(Source):
         ).execute()['items']
 
     def _get(self, id):
-        return = self.client.events().get(
+        return self.client.events().get(
             calendarId=self.id,
             eventId=id
         ).execute()
