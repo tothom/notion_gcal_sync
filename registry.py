@@ -3,6 +3,7 @@ from .event import Event
 import os
 import json
 from pprint import pprint
+import datetime
 
 
 import logging
@@ -12,41 +13,33 @@ logger = logging.getLogger(__name__)
 
 
 class Registry():
-    def __init__(self, sources):
-        self.sources = sources
-        self.sources_dict = {source.name: source for source in sources}
+    def __init__(self, sources, max_age=30):
+        self.sources = {s.name: s for s in sources}
+        # self.sources_dict = {source.name: source for source in sources}
         self.events = []
         self.last_checked = None
+        self.max_age = max_age
         self.pending_removals = []
 
         self.file_name = "table_" + \
-            "_".join([a.id for a in self.sources]) + ".json"
+            "_".join([a.id for a in self.sources.values()]) + ".json"
 
         self.load_from_file(self.file_name)
+
 
     def load_from_file(self, file_name):
         # self.file_name = f"table_{self.config['notion']['id']}_{self.config['gcal']['id']}.json"
 
         if os.path.exists(file_name):
-            print("File found")
-
             with open(file_name, 'r') as file:
                 table = json.load(file)
 
-            logger.debug(table)
-
-            # for id, properties in table['events'].items():
-            #     # event = Event.from_id_and_properties(id, properties)
-            #     self.events.append(event)
-
             self.events = [Event.from_dict(d) for d in table['events']]
-
             self.last_checked = table['last_checked']
 
-            print(self.events)
-
-            logger.info(
+            print(
                 f"Registry table loaded from {self.file_name}, last_checked: {self.last_checked}.")
+
 
     def save_table(self):
         with open(self.file_name, 'w') as file:
@@ -54,16 +47,17 @@ class Registry():
                 'last_checked': self.last_checked,
                 'events': [a.__dict__ for a in self.events]
             }, file, indent=4)
-            logger.info(f"Table written to {self.file_name}...")
+            print(f"Table written to {self.file_name}...")
 
-    def find_table_entry(self, search_id):
-        logger.info(f"SEARCHING for id '{search_id}' in Registry.")
 
-        for event in self.events:
-            for source, source_id in event.source_ids.items():
-                if search_id == source_id:
-                    logger.info(f"FOUND event with id '{event.id}.'")
-                    return event
+    def find_event(self, event):
+        logger.info(f"SEARCHING for event '{event.title}' in Registry.")
+
+        for registry_event in self.events:
+            if set(event.ids.values()) & set(registry_event.ids.values()) :
+                logger.info(f"FOUND event '{registry_event.title}'.")
+
+                return registry_event
 
         logger.info(f"Id NOT FOUND in Registry.")
         return None
@@ -72,73 +66,97 @@ class Registry():
         try:
             self.events.remove(event)
         except:
-            logger.info(f"Event {event.id} not removed from registry")
+            logger.info(f"Event {event.title} not removed from registry")
 
     def apply_removals(self):
         for event in self.pending_removals:
             self.remove_event(event)
         self.pending_removals = []
 
-    def fetch_updated_events(self):
+
+    def fetch_events(self, *args, **kwargs):
+        print(kwargs)
         events = []
 
-        for source in self.sources:
-            response = source.list_updated(self.last_checked)
+        for source in self.sources.values():
+            response = source.list(**kwargs)
 
             for item in response:
                 # pprint(item)
                 events.append(Event(**item))
 
-            # events.extend(response)
+        print(f"Fetched {len(events)} events from sources")
 
         return events
 
+
     def check_for_new_events(self):
-        events = self.fetch_updated_events()
+        print("Checking for new events")
+
+        time_min = datetime.datetime.now() - datetime.timedelta(days=self.max_age)
+        time_min = time_min.isoformat() + 'Z'
+
+        events = self.fetch_events(time_min=time_min)
 
         for event in events:
             result = self.check_if_event_is_new(event)
 
+
     def check_if_event_is_new(self, event):
+        print(f"Checking if event is new: {event.title}")
         if not event.start:
             return
 
-        found_event = self.find_table_entry(event)
+        found_event = self.find_event(event)
 
         if not found_event:
+            print("Event is new. Adding to registry.")
             logger.debug(event.__dict__)
 
-            for source in self._other_sources(event):
+            for source in [self.sources[key] for key in self.sources.keys() - event.ids.keys()]:
                 new = source.create(event.properties)
                 event.update(new)
 
-            self.events.append(Event(**event))
+            self.events.append(event)
 
 
-    def _other_sources(self, event):
-        return [a for a in self.sources if not a.name in event.source_ids.keys()]
+    def _get_remote_events(self, event):
+        remote_events = []
+
+        for name, id in event.ids.items():
+            properties = self.sources[name].get(id)
+            remote_event = Event(**properties)
+            remote_events.append(remote_event)
+
+        return remote_events
 
 
     def check_for_changes(self):
-        print("Checking for changes.")
+        print("Checking registry for changes.")
+
         for event in self.events:
-            remote_events = [self.sources_dict[name].get(id) for
-                name, id in event.source_ids.items()]
+            print(f"Checking event {event.title}")
 
-            latest_updated_event = sorted(remote_events, key=lambda x:x['updated'], reverse=True)[0]
+            remote_events = self._get_remote_events(event)
+            latest_updated_event = sorted(remote_events, key=lambda x:x.updated, reverse=True)[0]
+            other_sources = [self.sources[key] for key in self.sources.keys() - latest_updated_event.ids.keys()]
 
-            other_sources = self._other_sources(event)
-
-            if latest_updated_event['archived'] or not latest_updated_event['start']:
+            if latest_updated_event.archived or not latest_updated_event.start:
                 print("Event is deleted or misses date property")
+
                 for source in other_sources:
-                    new = source.delete(event.properties)
+                    print(f"Deleting event at {source.name}")
+                    new = source.delete(event.ids[source.name])
+
                 self.pending_removals.append(event)
 
-            elif latest_updated_event['updated'] > event.updated:
+            elif latest_updated_event.updated > event.updated:
                 print("Event has changed")
+
                 for source in other_sources:
-                    new = source.update(event.properties)
+                    print(f"Updating event at {source.name}")
+
+                    new = source.update(event.ids[source.name], event.properties)
 
             else:
                 print("No changes")
@@ -147,3 +165,17 @@ class Registry():
             event.update(new)
 
         self.apply_removals()
+
+
+    def sync(self):
+        now = datetime.datetime.now().isoformat() + 'Z'
+
+        self.check_for_changes()
+
+
+        self.check_for_new_events()
+
+
+        self.last_checked = now
+
+        self.save_table()

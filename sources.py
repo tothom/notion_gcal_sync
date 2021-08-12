@@ -1,5 +1,4 @@
 # from .source import Source
-from .event import Event
 
 import datetime
 import dateutil
@@ -26,13 +25,15 @@ logger = logging.getLogger(__name__)
 class Source():
     """docstring for Source."""
 
-    def __init__(self, id, name, token, keys={}):
+    def __init__(self, name, id, token, keys={}):
         self.id = id
         self.name = name
         self.token = token
         self.keys = keys
 
         self.authenticate()
+
+        self.exception = None
 
     def authenticate(self):
         self.client = None
@@ -43,26 +44,31 @@ class Source():
     def prepare_properties(self):
         return {}
 
-    def _get_init_query(config, datetime_min):
-        return {}
+    def _get_error_code(self, error):
+        pass
 
-    def _get_updates_query(config, last_edited):
-        return {}
+    def _get_query(self, **kwargs):
+        pass
 
-    def list_updated(self, last_edited):
-        query = self._get_updates_query(last_edited)
-        return self.list(query)
+    def _request(self, method, query):
+        try:
+            response = method(query)
+        except self.http_exception as e:
+            error_code = self._get_error_code(e)
+            print(f"{error_code} {type(e)}: {e}")
+            response = {}
+        else:
+            logger.debug(response)
 
-    def list_since_datetime_min(self, datetime_min):
-        # if isinstance(datetime_min, datetime.datetime)
-        query = self._get_init_query(datetime_min)
-        return self.list(query)
+        return response
 
-    def list(self, query):
+    def list(self, **kwargs):
+        query = self._get_query(**kwargs)
+
         try:
             response = self._list(query)
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
+        except self.http_exception as e:
+            print(f"{type(e)}: {e}")
             response = {}
         else:
             logger.debug(response)
@@ -72,24 +78,24 @@ class Source():
     def get(self, id):
         try:
             response = self._get(id)
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
+        except self.http_exception as e:
+            print(f"{type(e)}: {e}")
             event = {}
         else:
-            logger.debug(response)
+            # print(response)
             event = self.read_response(response)
 
         return event
 
     def create(self, properties):
         try:
-            pprint(properties)
+            # pprint(properties)
             response = self._create(properties)
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
+        except self.http_exception as e:
+            print(f"{type(e)}: {e}")
             event = {}
         else:
-            logger.debug(response)
+            # print(response)
             event = self.read_response(response)
 
         return event
@@ -97,21 +103,23 @@ class Source():
     def update(self, id, properties):
         try:
             response = self._update(id, properties)
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
+        except self.http_exception as e:
+            print(f"{type(e)}: {e}")
             event = {}
         else:
-            logger.debug(response)
+            # print(response)
             event = self.read_response(response)
+
+        return event
 
     def delete(self, id):
         try:
             response = self._delete(id)
-        except Exception as e:
-            logger.info(f"{type(e)}: {e}")
+        except self.http_exception as e:
+            print(f"{type(e)}: {e}")
             event = {}
         else:
-            logger.debug(response)
+            # print(response)
             event = self.read_response(response)
 
         return event
@@ -122,6 +130,8 @@ class Notion(Source):
 
     def __init__(self, *args, **kwargs):
         super(Notion, self).__init__(*args, **kwargs)
+
+        self.exception = APIResponseError
 
     def authenticate(self):
         self.client = Client(auth=self.token)
@@ -139,13 +149,11 @@ class Notion(Source):
                                 for a in response['properties'][self.keys['title']]['title']]),
             'description': ', '.join([a.get('plain_text', '')
                                       for a in response['properties'][self.keys['description']]['rich_text']]),
-            # 'date': response['properties'].get(self.keys['date'], {}).get('date'),
             'start': start,
             'end': end,
             'archived': response['archived'],
-            'source_ids': {self.name: response['id']},
+            'ids': {self.name: response['id']},
             'updated': response['last_edited_time'],
-            # 'id': ,
             'url': response['url']
         }
 
@@ -175,31 +183,42 @@ class Notion(Source):
             }
         }
 
-    def _get_init_query(self, datetime_min):
+    def _get_query(self, **kwargs):
+        # pprint(kwargs)
+
         return {
             'filter': {
                 'property': self.keys['date'],
                 'date': {
-                    'on_or_after': datetime_min
+                    'on_or_after': kwargs['time_min']
                 }
             }
         }
 
-    def _get_updates_query(self, last_edited):
+        pass
+
+
         return {
             'filter': {
                 'property': self.keys['last_edited_time'],
                 'last_edited_time': {
-                    'on_or_after': last_edited
+                    'on_or_after': updated_min
                 }
             }
         }
 
-    def _list(self, query={}):
-        return self.client.databases.query(
+
+
+    def list(self, **kwargs):
+        query = self._get_query(**kwargs)
+        # pprint(query)
+
+        response = self.client.databases.query(
             database_id=self.id,
             **query
         )['results']
+
+        return [self.read_response(a) for a in response]
 
     def _get(self, id):
         return self.client.pages.retrieve(
@@ -284,13 +303,11 @@ class GCal(Source):
         return {
             'title': response.get('summary', ''),
             'description': response.get('description', ''),
-            # 'date': date,
             'archived': response['status'] == 'cancelled',
-            'source_ids': {self.name: response['id']},
+            'ids': {self.name: response['id']},
             'updated': response.get('updated'),
             'start': start,
             'end': end
-            # 'id': response['id']
         }
 
     def prepare_properties(self, properties):
@@ -319,25 +336,30 @@ class GCal(Source):
             'end': {gcal_datetime_key: end}
         }
 
-    def _get_init_query(self, datetime_min):
-        return {
-            'timeMin': datetime_min,
-            'singleEvents': True,
-            'orderBy': 'updated',
-        }
+    def _get_query(self, **kwargs):
+            return {
+                    'timeMin': kwargs['time_min'],
+                    'singleEvents': True,
+                    'orderBy': 'updated'
+                }
 
-    def _get_updates_query(self, last_edited):
-        return {
-            'updatedMin': last_edited,
-            'singleEvents': True,
-            'orderBy': 'updated',
-        }
+            return {
+                'updatedMin': last_edited,
+                'singleEvents': True,
+                'orderBy': 'updated'
+            }
 
-    def _list(self, query={}):
-        return self.client.events().list(
+    def list(self, **kwargs):
+
+        query = self._get_query(**kwargs)
+        # pprint(query)
+
+        response = self.client.events().list(
             calendarId=self.id,
             **query
         ).execute()['items']
+
+        return [self.read_response(a) for a in response]
 
     def _get(self, id):
         return self.client.events().get(

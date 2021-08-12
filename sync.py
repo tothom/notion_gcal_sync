@@ -15,7 +15,7 @@ logging.basicConfig(
     filename='notion_gcal_sync.log',
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
     encoding='utf-8',
-    level=logging.DEBUG)
+    level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +25,18 @@ def init():
     logger.info('Config loaded.')
 
     sources = [
-        Notion(config['sources']['notion']['id'], 'notion', config['sources']['notion']['token'], keys=config['sources']['notion']['keys']),
-        GCal(config['sources']['gcal']['id'], 'gcal', config['sources']['gcal']['token'])
+        # Notion(config['sources']['notion']['id'], 'notion', config['sources']['notion']['token'], keys=config['sources']['notion']['keys']),
+        Notion('notion', **config['sources']['notion']),
+        GCal('gcal', **config['sources']['gcal']),
+        # GCal(config['sources']['gcal']['id'], 'gcal', config['sources']['gcal']['token'])
     ]
 
-    return Registry(sources)
+    return Registry(sources, max_age=config['max_age'])
 
 def main():
     registry = init()
-    registry.check_for_changes()
-    registry.check_for_new_events()
 
-    registry.save_table()
+    registry.sync()
 
 
 def run():
