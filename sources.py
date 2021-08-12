@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 class Source():
     """docstring for Source."""
 
+    http_error_codes = {
+        404: "Object not found"
+    }
+
     def __init__(self, name, id, token, keys={}):
         self.id = id
         self.name = name
@@ -33,28 +37,31 @@ class Source():
 
         self.authenticate()
 
-        self.exception = None
+        self.http_exception = None # Override with client HTTP Exception
 
     def authenticate(self):
         self.client = None
 
-    def read_response(self, response):
+    def _read_response(self, response):
         return {}
 
-    def prepare_properties(self):
+    def _prepare_properties(self):
         return {}
 
-    def _get_error_code(self, error):
-        pass
+    def _get_error_code(self, e):
+        """Update to return http error codes
+        """
+        return e.status
 
     def _get_query(self, **kwargs):
         pass
 
-    def _request(self, method, query):
+    def _request(self, request_function, query):
         try:
-            response = method(query)
+            response = request_function(query)
         except self.http_exception as e:
             error_code = self._get_error_code(e)
+
             print(f"{error_code} {type(e)}: {e}")
             response = {}
         else:
@@ -65,64 +72,29 @@ class Source():
     def list(self, **kwargs):
         query = self._get_query(**kwargs)
 
-        try:
-            response = self._list(query)
-        except self.http_exception as e:
-            print(f"{type(e)}: {e}")
-            response = {}
-        else:
-            logger.debug(response)
+        response = self._request(self._list, query)
 
-        return [self.read_response(a) for a in response]
+        return [self._read_response(a) for a in response]
 
-    def get(self, id):
-        try:
-            response = self._get(id)
-        except self.http_exception as e:
-            print(f"{type(e)}: {e}")
-            event = {}
-        else:
-            # print(response)
-            event = self.read_response(response)
+    def get(self, *args, **kwargs):
+        response = self._request(self._get, *args, **kwargs)
 
-        return event
+        return self._read_response(response)
 
-    def create(self, properties):
-        try:
-            # pprint(properties)
-            response = self._create(properties)
-        except self.http_exception as e:
-            print(f"{type(e)}: {e}")
-            event = {}
-        else:
-            # print(response)
-            event = self.read_response(response)
+    def create(self, *args, **kwargs):
+        response = self._request(self._create, *args, **kwargs)
 
-        return event
+        return self._read_response(response)
 
-    def update(self, id, properties):
-        try:
-            response = self._update(id, properties)
-        except self.http_exception as e:
-            print(f"{type(e)}: {e}")
-            event = {}
-        else:
-            # print(response)
-            event = self.read_response(response)
+    def update(self, *args, **kwargs):
+        response = self._request(self._update, *args, **kwargs)
 
-        return event
+        return self._read_response(response)
 
-    def delete(self, id):
-        try:
-            response = self._delete(id)
-        except self.http_exception as e:
-            print(f"{type(e)}: {e}")
-            event = {}
-        else:
-            # print(response)
-            event = self.read_response(response)
+    def delete(self, *args, **kwargs):
+        response = self._request(self._delete, *args, **kwargs)
 
-        return event
+        return self._read_response(response)
 
 
 class Notion(Source):
@@ -131,12 +103,12 @@ class Notion(Source):
     def __init__(self, *args, **kwargs):
         super(Notion, self).__init__(*args, **kwargs)
 
-        self.exception = APIResponseError
+        self.http_exception = APIResponseError
 
     def authenticate(self):
         self.client = Client(auth=self.token)
 
-    def read_response(self, response, **kwargs):
+    def _read_response(self, response, **kwargs):
         if response['properties'].get(self.keys['date']):
             start = response['properties'][self.keys['date']]['date']['start']
             end = response['properties'][self.keys['date']]['date']['end']
@@ -157,7 +129,7 @@ class Notion(Source):
             'url': response['url']
         }
 
-    def prepare_properties(self, properties, **kwargs):
+    def _prepare_properties(self, properties, **kwargs):
         return {
             self.keys['title']: {
                 "title": [
@@ -207,18 +179,20 @@ class Notion(Source):
             }
         }
 
+    def _get_error_code(self, e):
+        return e.status
 
 
-    def list(self, **kwargs):
-        query = self._get_query(**kwargs)
-        # pprint(query)
+    def _list(self, query):
+        # query = self._get_query(**kwargs)
+        # # pprint(query)
 
         response = self.client.databases.query(
             database_id=self.id,
             **query
         )['results']
 
-        return [self.read_response(a) for a in response]
+        return response
 
     def _get(self, id):
         return self.client.pages.retrieve(
@@ -228,13 +202,13 @@ class Notion(Source):
     def _create(self, properties):
         return self.client.pages.create(
             parent={"database_id": self.id},
-            properties=self.prepare_properties(properties)
+            properties=self._prepare_properties(properties)
         )
 
     def _update(self, id, properties):
         return self.client.pages.update(
             page_id=id,
-            properties=self.prepare_properties(properties)
+            properties=self._prepare_properties(properties)
         )
 
     def _delete(self, id):
@@ -249,6 +223,8 @@ class GCal(Source):
 
     def __init__(self, *args, **kwargs):
         super(GCal, self).__init__(*args, **kwargs)
+
+        self.http_exception = HttpError
 
     def authenticate(self):
         """"""
@@ -280,7 +256,7 @@ class GCal(Source):
 
         self.client = build('calendar', 'v3', credentials=self.creds)
 
-    def read_response(self, response, **kwargs):
+    def _read_response(self, response, **kwargs):
         # pprint(response)
         if not response.get('start'):
             start = None
@@ -310,7 +286,7 @@ class GCal(Source):
             'end': end
         }
 
-    def prepare_properties(self, properties):
+    def _prepare_properties(self, properties):
         # Notion and Google seem to interpret event lengths differently
         start = properties['start']
         end = properties['end']
@@ -337,21 +313,21 @@ class GCal(Source):
         }
 
     def _get_query(self, **kwargs):
-            return {
-                    'timeMin': kwargs['time_min'],
-                    'singleEvents': True,
-                    'orderBy': 'updated'
-                }
-
-            return {
-                'updatedMin': last_edited,
+        return {
+                'timeMin': kwargs['time_min'],
                 'singleEvents': True,
                 'orderBy': 'updated'
             }
 
-    def list(self, **kwargs):
+        return {
+            'updatedMin': last_edited,
+            'singleEvents': True,
+            'orderBy': 'updated'
+        }
 
-        query = self._get_query(**kwargs)
+    def _list(self, query):
+
+        # query = self._get_query(**kwargs)
         # pprint(query)
 
         response = self.client.events().list(
@@ -359,7 +335,8 @@ class GCal(Source):
             **query
         ).execute()['items']
 
-        return [self.read_response(a) for a in response]
+        # return [self._read_response(a) for a in response]
+        return response
 
     def _get(self, id):
         return self.client.events().get(
@@ -370,14 +347,14 @@ class GCal(Source):
     def _create(self, properties):
         return self.client.events().insert(
             calendarId=self.id,
-            body=self.prepare_properties(properties)
+            body=self._prepare_properties(properties)
         ).execute()
 
     def _update(self, id, properties):
         return self.client.events().update(
             calendarId=self.id,
             eventId=id,
-            body=self.prepare_properties(properties)
+            body=self._prepare_properties(properties)
         ).execute()
 
     def _delete(self, id):
