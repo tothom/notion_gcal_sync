@@ -70,7 +70,7 @@ class Registry():
         self.pending_removals = []
 
     def fetch_events(self, *args, **kwargs):
-        logger.debug(args, kwargs)
+        # logger.debug(args, kwargs)
         events = []
 
         for source in self.sources.values():

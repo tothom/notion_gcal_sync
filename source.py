@@ -40,6 +40,8 @@ class Source():
         pass
 
     def _request(self, request_function, *args, **kwargs):
+        logger.debug(args)
+
         try:
             response = request_function(*args, **kwargs)
 
@@ -56,7 +58,7 @@ class Source():
 
             response = {}
 
-        logger.debug(response)
+        # logger.debug(response)
 
         return response
 
