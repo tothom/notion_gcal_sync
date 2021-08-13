@@ -40,6 +40,8 @@ class Event():
         self.ids[source_name] = id
 
     def update(self, delta):
+        if not delta:
+            return
         try:
             for source_name, id in delta.pop('ids').items():
                 self.add_source_id(source_name, id)

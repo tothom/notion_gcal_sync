@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 class Registry():
     def __init__(self, sources, max_age=30):
         self.sources = {s.name: s for s in sources}
-        # self.sources_dict = {source.name: source for source in sources}
         self.events = []
         self.last_checked = None
         self.max_age = max_age
@@ -25,7 +24,6 @@ class Registry():
             "_".join([a.id for a in self.sources.values()]) + ".json"
 
         self.load_from_file(self.file_name)
-
 
     def load_from_file(self, file_name):
         # self.file_name = f"table_{self.config['notion']['id']}_{self.config['gcal']['id']}.json"
@@ -37,9 +35,8 @@ class Registry():
             self.events = [Event.from_dict(d) for d in table['events']]
             self.last_checked = table['last_checked']
 
-            print(
+            logger.info(
                 f"Registry table loaded from {self.file_name}, last_checked: {self.last_checked}.")
-
 
     def save_table(self):
         with open(self.file_name, 'w') as file:
@@ -47,19 +44,18 @@ class Registry():
                 'last_checked': self.last_checked,
                 'events': [a.__dict__ for a in self.events]
             }, file, indent=4)
-            print(f"Table written to {self.file_name}...")
-
+            logger.info(f"Table written to {self.file_name}...")
 
     def find_event(self, event):
-        logger.info(f"SEARCHING for event '{event.title}' in Registry.")
+        logger.info(f"Searching for event '{event.title}' in Registry.")
 
         for registry_event in self.events:
-            if set(event.ids.values()) & set(registry_event.ids.values()) :
-                logger.info(f"FOUND event '{registry_event.title}'.")
+            if set(event.ids.values()) & set(registry_event.ids.values()):
+                logger.info(f"\tFound event '{registry_event.title}'.")
 
                 return registry_event
 
-        logger.info(f"Id NOT FOUND in Registry.")
+        logger.info(f"\tDid not find event in Registry.")
         return None
 
     def remove_event(self, event):
@@ -73,9 +69,8 @@ class Registry():
             self.remove_event(event)
         self.pending_removals = []
 
-
     def fetch_events(self, *args, **kwargs):
-        print(kwargs)
+        logger.debug(args, kwargs)
         events = []
 
         for source in self.sources.values():
@@ -85,13 +80,12 @@ class Registry():
                 # pprint(item)
                 events.append(Event(**item))
 
-        print(f"Fetched {len(events)} events from sources")
+        logger.info(f"Fetched {len(events)} events from sources")
 
         return events
 
-
     def check_for_new_events(self):
-        print("Checking for new events")
+        logger.info("Checking for new events")
 
         time_min = datetime.datetime.now() - datetime.timedelta(days=self.max_age)
         time_min = time_min.isoformat() + 'Z'
@@ -101,16 +95,15 @@ class Registry():
         for event in events:
             result = self.check_if_event_is_new(event)
 
-
     def check_if_event_is_new(self, event):
-        print(f"Checking if event is new: {event.title}")
+        logger.info(f"Checking if event is new: {event.title}")
         if not event.start:
             return
 
         found_event = self.find_event(event)
 
         if not found_event:
-            print("Event is new. Adding to registry.")
+            logger.info("\tEvent is new. Adding to registry.")
             logger.debug(event.__dict__)
 
             for source in [self.sources[key] for key in self.sources.keys() - event.ids.keys()]:
@@ -118,7 +111,6 @@ class Registry():
                 event.update(new)
 
             self.events.append(event)
-
 
     def _get_remote_events(self, event):
         remote_events = []
@@ -130,51 +122,54 @@ class Registry():
 
         return remote_events
 
-
     def check_for_changes(self):
-        print("Checking registry for changes.")
+        logger.info("Checking registry for changes.")
 
         for event in self.events:
-            print(f"Checking event {event.title}")
+            logger.info(f"Checking event {event.title}")
 
             remote_events = self._get_remote_events(event)
-            latest_updated_event = sorted(remote_events, key=lambda x:x.updated, reverse=True)[0]
-            other_sources = [self.sources[key] for key in self.sources.keys() - latest_updated_event.ids.keys()]
+            latest_updated_event = sorted(remote_events, key=lambda x: x.updated,
+                                          reverse=True)[0]
+            other_sources = [self.sources[key] for key in
+                             self.sources.keys() - latest_updated_event.ids.keys()]
 
             if latest_updated_event.archived or not latest_updated_event.start:
-                print("Event is deleted or misses date property")
+                logger.info("\tEvent is DELETED or misses date property")
 
                 for source in other_sources:
-                    print(f"Deleting event at {source.name}")
+                    logger.info(f"\t\tDeleting event at {source.name}")
                     new = source.delete(event.ids[source.name])
 
                 self.pending_removals.append(event)
 
             elif latest_updated_event.updated > event.updated:
-                print("Event has changed")
+                logger.info("\tEvent has been UPDATED")
 
                 for source in other_sources:
-                    print(f"Updating event at {source.name}")
+                    logger.info(f"\t\tUpdating event at {source.name}")
 
-                    new = source.update(event.ids[source.name], event.properties)
+                    new = source.update(
+                        event.ids[source.name], latest_updated_event.properties)
+
+            elif False:
+                pass
+                # Event has expired from Registry
 
             else:
-                print("No changes")
+                logger.info("\tNo changes")
                 new = {}
 
             event.update(new)
 
         self.apply_removals()
 
-
     def sync(self):
         now = datetime.datetime.now().isoformat() + 'Z'
 
         self.check_for_changes()
 
-
         self.check_for_new_events()
-
 
         self.last_checked = now
 
