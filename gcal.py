@@ -114,7 +114,13 @@ class GCal(Source):
         query = {
             'singleEvents': True,
             'orderBy': 'updated'
-        } | kwargs
+        }
+
+        if 'time_min' in kwargs:
+            query['timeMin'] = kwargs['time_min']
+
+        if 'updated_min' in kwargs:
+            query['updatedMin'] = kwargs['updated_min']
 
         return query
 
