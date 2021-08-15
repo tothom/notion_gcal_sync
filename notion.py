@@ -24,19 +24,21 @@ class Notion(Source):
     def _read_response(self, response, **kwargs):
         if not response:
             return
-            
-        if response['properties'].get(self.keys['date']):
-            start = response['properties'][self.keys['date']]['date']['start']
-            end = response['properties'][self.keys['date']]['date']['end']
+
+        properties = response.get('properties')
+
+        if properties.get(self.keys['date']):
+            start = properties[self.keys['date']]['date']['start']
+            end = properties[self.keys['date']]['date']['end']
         else:
             start = None
             end = None
 
         return {
             'title': ', '.join([a.get('plain_text', '')
-                                for a in response['properties'][self.keys['title']]['title']]),
+                                for a in properties[self.keys['title']]['title']]),
             'description': ', '.join([a.get('plain_text', '')
-                                      for a in response['properties'][self.keys['description']]['rich_text']]),
+                                      for a in properties[self.keys['description']]['rich_text']]),
             'start': start,
             'end': end,
             'archived': response['archived'],
@@ -59,15 +61,20 @@ class Notion(Source):
             },
             self.keys['description']: {
                 "type": "rich_text",
-                "rich_text": [{
-                    "type": "text",
-                    "text": {"content": properties['description']}
-                }
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": properties['description']
+                        }
+                    }
                 ]
             },
-            self.keys['date']: {'date': {
-                'start': properties['start'],
-                'end': properties['end']}
+            self.keys['date']: {
+                'date': {
+                    'start': properties['start'],
+                    'end': properties['end']
+                }
             }
         }
 
@@ -83,7 +90,6 @@ class Notion(Source):
 
         pass
 
-
         return {
             'filter': {
                 'property': self.keys['last_edited_time'],
@@ -97,12 +103,10 @@ class Notion(Source):
         return e.status
 
     def _list(self, query):
-        response = self.client.databases.query(
+        return self.client.databases.query(
             database_id=self.id,
             **query
         )['results']
-
-        return response
 
     def _get(self, id):
         return self.client.pages.retrieve(

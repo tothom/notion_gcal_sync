@@ -12,6 +12,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.errors import HttpError
 
+
 class GCal(Source):
     """docstring"""
 
@@ -84,7 +85,6 @@ class GCal(Source):
         }
 
     def _prepare_properties(self, properties):
-        # Notion and Google seem to interpret event lengths differently
         start = properties['start']
         end = properties['end']
 
@@ -92,6 +92,7 @@ class GCal(Source):
 
         try:
             dt = datetime.datetime.strptime(start, '%Y-%m-%d')
+
         except ValueError as e:
             gcal_datetime_key = 'dateTime'
         else:
@@ -110,25 +111,19 @@ class GCal(Source):
         }
 
     def _get_query(self, **kwargs):
-        return {
-                'timeMin': kwargs['time_min'],
-                'singleEvents': True,
-                'orderBy': 'updated'
-            }
-
-        return {
-            'updatedMin': last_edited,
+        query = {
             'singleEvents': True,
             'orderBy': 'updated'
-        }
+        } | kwargs
+
+        return query
+
 
     def _list(self, query):
-        response = self.client.events().list(
+        return self.client.events().list(
             calendarId=self.id,
             **query
         ).execute()['items']
-
-        return response
 
     def _get(self, id):
         return self.client.events().get(
