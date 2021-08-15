@@ -103,7 +103,7 @@ class Source():
             'end': reponse.get('end')
         }
 
-    def _prepare_properties(self. properties):
+    def _prepare_properties(self, properties):
         return {}
 
     def _get_status_code(self, e):
