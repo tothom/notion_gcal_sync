@@ -32,7 +32,7 @@ class Registry():
             with open(file_name, 'r') as file:
                 table = json.load(file)
 
-            self.events = [Event.from_dict(d) for d in table['events']]
+            self.events = [Event(**d) for d in table['events']]
             self.last_checked = table['last_checked']
 
             logger.info(
