@@ -48,8 +48,24 @@ class Notion(Source):
         }
 
     def _prepare_properties(self, properties, **kwargs):
-        return {
-            self.keys['title']: {
+        output = {}
+
+        if 'start' in properties:
+            output[self.keys['date']] = {
+                'date': {
+                    'start': properties['start'],
+                }
+            }
+
+        if 'end' in properties:
+            output[self.keys['date']] = {
+                'date': {
+                    'end': properties['end'],
+                }
+            }
+
+        if 'title' in properties:
+            output[self.keys['title']] = {
                 "title": [
                     {
                         "type": "text",
@@ -58,8 +74,10 @@ class Notion(Source):
                         }
                     }
                 ]
-            },
-            self.keys['description']: {
+            }
+
+        if 'description' in properties:
+            output[self.keys['description']] = {
                 "type": "rich_text",
                 "rich_text": [
                     {
@@ -69,14 +87,9 @@ class Notion(Source):
                         }
                     }
                 ]
-            },
-            self.keys['date']: {
-                'date': {
-                    'start': properties['start'],
-                    'end': properties['end']
-                }
             }
-        }
+
+        return output
 
     def _get_query(self, **kwargs):
         return {
@@ -121,6 +134,12 @@ class Notion(Source):
 
     def _update(self, id, properties):
         return self.client.pages.update(
+            page_id=id,
+            properties=self._prepare_properties(properties)
+        )
+
+    def _patch(self, id, properties):
+        return self.client.pages.patch(
             page_id=id,
             properties=self._prepare_properties(properties)
         )

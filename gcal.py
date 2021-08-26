@@ -85,30 +85,37 @@ class GCal(Source):
         }
 
     def _prepare_properties(self, properties):
-        start = properties['start']
-        end = properties['end']
+        output = {}
 
-        end = end or start  # End time cannot be empty
+        if 'start' in properties:
+            start = properties['start']
+            end = properties['end']
 
-        try:
-            dt = datetime.datetime.strptime(start, '%Y-%m-%d')
+            end = end or start  # End time cannot be empty
 
-        except ValueError as e:
-            gcal_datetime_key = 'dateTime'
-        else:
-            gcal_datetime_key = 'date'
+            try:
+                dt = datetime.datetime.strptime(start, '%Y-%m-%d')
 
-            if start != end:
-                new_datetime = dateutil.parser.parse(
-                    end) + datetime.timedelta(days=1)
-                end = new_datetime.strftime('%Y-%m-%d')
+            except ValueError as e:
+                gcal_datetime_key = 'dateTime'
+            else:
+                gcal_datetime_key = 'date'
 
-        return {
-            'summary': properties['title'],
-            'description': properties['description'],
-            'start': {gcal_datetime_key: start},
-            'end': {gcal_datetime_key: end}
-        }
+                if start != end:
+                    new_datetime = dateutil.parser.parse(
+                        end) + datetime.timedelta(days=1)
+                    end = new_datetime.strftime('%Y-%m-%d')
+
+            output['start'] = {gcal_datetime_key: start},
+            output['end'] = {gcal_datetime_key: end}
+
+        if 'title' in properties:
+            output['summary'] = properties['title']
+
+        if 'description' in properties:
+            output['description'] = properties['description']
+
+        return output
 
     def _get_query(self, **kwargs):
         query = {
@@ -123,7 +130,6 @@ class GCal(Source):
             query['updatedMin'] = kwargs['updated_min']
 
         return query
-
 
     def _list(self, query):
         return self.client.events().list(
@@ -145,6 +151,13 @@ class GCal(Source):
 
     def _update(self, id, properties):
         return self.client.events().update(
+            calendarId=self.id,
+            eventId=id,
+            body=self._prepare_properties(properties)
+        ).execute()
+
+    def _patch(self, id, properties):
+        return self.client.events().patch(
             calendarId=self.id,
             eventId=id,
             body=self._prepare_properties(properties)

@@ -76,6 +76,14 @@ class Source():
         else:
             return self._read_response(response)
 
+    def patch(self, id, properties):
+        response = self._request(self._patch, id, properties)
+
+        if not response:
+            return {}
+        else:
+            return self._read_response(response)
+
     def delete(self, id):
         response = self._request(self._delete, id)
 
