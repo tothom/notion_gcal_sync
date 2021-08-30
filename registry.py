@@ -47,11 +47,11 @@ class Registry():
             logger.info(f"Table written to {self.file_name}...")
 
     def find_event(self, event):
-        logger.info(f"Searching for event '{event.title}' in Registry.")
+        logger.info(f"Searching for event '{event}' in Registry.")
 
         for registry_event in self.events:
             if set(event.ids.values()) & set(registry_event.ids.values()):
-                logger.info(f"\tFound event '{registry_event.title}'.")
+                logger.info(f"\tFound event '{registry_event}'.")
 
                 return registry_event
 
@@ -62,7 +62,7 @@ class Registry():
         try:
             self.events.remove(event)
         except:
-            logger.info(f"Event {event.title} not removed from registry")
+            logger.info(f"Event {event} not removed from registry")
 
     def apply_removals(self):
         for event in self.pending_removals:
@@ -96,7 +96,7 @@ class Registry():
             result = self.check_if_event_is_new(event)
 
     def check_if_event_is_new(self, event):
-        logger.info(f"Checking if event is new: {event.title}")
+        logger.info(f"Checking if event is new: {event}")
         if not event.start:
             return
 
@@ -126,7 +126,7 @@ class Registry():
         logger.info("Checking registry for changes.")
 
         for reg_event in self.events:
-            logger.info(f"Checking event {event.title}")
+            logger.info(f"Checking event {event}")
 
             remote_events = self._get_remote_events(reg_event)
             latest_updated_event = sorted(remote_events, key=lambda x: x.updated,
@@ -156,13 +156,13 @@ class Registry():
             elif latest_updated_event.updated > reg_event.updated:
                 logger.info("\tEvent has been UPDATED")
 
-                properties_diff = Event.diff(latest_updated_event, reg_event)
+                diff_event = latest_updated_event - reg_event
 
                 for source in other_sources:
                     logger.info(f"\t\tUpdating event at {source.name}")
 
                     new = source.patch(
-                        reg_event.ids[source.name], properties_diff)
+                        reg_event.ids[source.name], diff_event.properties)
 
             elif False:
                 pass

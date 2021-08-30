@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 class Event():
     """docstring for Event."""
 
-    def __init__(self, ids={}, title="", start="", end="",
-                 description="", url="", updated="", archived=""
+    def __init__(self, ids={}, title=None, start=None, end=None,
+                 description=None, url=None, updated=None, archived=False
                  ):
         self.ids = ids
         # self.id = id or str(uuid.uuid4())
@@ -32,11 +32,6 @@ class Event():
             'archived': self.archived
         }
 
-    @staticmethod
-    def diff(a, b):
-        return {k:v for k, v in
-            set(a.properties.items()) - set(b.properties.items())}
-
     def update(self, delta):
         if not delta:
             return
@@ -47,3 +42,21 @@ class Event():
             pass
         finally:
             self.__dict__.update(delta)
+
+    # @staticmethod
+    # def diff(a, b):
+    #     return {k:v for k, v in
+    #         set(a.properties.items()) - set(b.properties.items())}
+
+    def __sub__(self, other):
+        return Event(**{k:v for k, v in
+            set(self.properties.items()) - set(other.properties.items())})
+
+    def __eq__(self, other):
+        return self.properties == other.properties
+
+    def __ne__(self, other):
+        return self.properties != other.properties
+
+    def __str__(self):
+        return f"Event: {self.title}: {self.start} - {self.end}"
