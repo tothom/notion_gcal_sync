@@ -43,11 +43,6 @@ class Event():
         finally:
             self.__dict__.update(delta)
 
-    # @staticmethod
-    # def diff(a, b):
-    #     return {k:v for k, v in
-    #         set(a.properties.items()) - set(b.properties.items())}
-
     def __sub__(self, other):
         return Event(**{k:v for k, v in
             set(self.properties.items()) - set(other.properties.items())})
