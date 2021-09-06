@@ -16,11 +16,18 @@ class Event():
         self.updated = updated
         self.title = title
         self.start = start
-        self.end = end
+        self.end = end # End property is exclusive
         self.description = description
         self.url = url
         self.archived = archived
 
+    @property
+    def attributes(self):
+        return {
+            'ids': self.ids,
+            'updated': self.updated,
+            'url': self.url
+        }
 
     @property
     def properties(self):
@@ -54,4 +61,7 @@ class Event():
         return self.properties != other.properties
 
     def __str__(self):
-        return f"Event: {self.title}: {self.start} - {self.end}"
+        return f"<Event={self.title}: {self.start} - {self.end}>"
+
+    def __repr__(self):
+        return f"<Event={self.properties}>"
