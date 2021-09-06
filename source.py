@@ -18,7 +18,8 @@ class Source():
         self.http_exception = None  # Override with client HTTP Exception
 
     def _request(self, request_method, *args, **kwargs):
-        logger.debug(args)
+        logger.debug(f"{args=}")
+        logger.debug(f"{kwargs=}")
 
         try:
             response = request_method(*args, **kwargs)
@@ -32,6 +33,9 @@ class Source():
                 raise e
             elif status_code == 404:
                 # Not found
+                pass
+            elif status_code == 410:
+                # Event deleted
                 pass
             else:
                 raise e
@@ -77,6 +81,8 @@ class Source():
             return self._read_response(response)
 
     def patch(self, id, properties):
+        properties = self.clean_properties(properties)
+
         response = self._request(self._patch, id, properties)
 
         if not response:
@@ -113,6 +119,10 @@ class Source():
 
     def _prepare_properties(self, properties):
         return {}
+
+    def clean_properties(self, properties):
+        return {k: v for k, v in properties.items() if v is not None}
+
 
     def _get_status_code(self, e):
         """Update to return http status codes

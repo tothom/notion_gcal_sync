@@ -18,14 +18,15 @@ class Registry():
         self.events = []
         self.last_checked = None
         self.max_age = max_age
+
         self.pending_removals = []
 
         self.file_name = "table_" + \
             "_".join([a.id for a in self.sources.values()]) + ".json"
 
-        self.load_from_file(self.file_name)
+        self.load_table(self.file_name)
 
-    def load_from_file(self, file_name):
+    def load_table(self, file_name):
         # self.file_name = f"table_{self.config['notion']['id']}_{self.config['gcal']['id']}.json"
 
         if os.path.exists(file_name):
@@ -44,6 +45,7 @@ class Registry():
                 'last_checked': self.last_checked,
                 'events': [a.__dict__ for a in self.events]
             }, file, indent=4)
+
             logger.info(f"Table written to {self.file_name}...")
 
     def find_event(self, event):
@@ -56,8 +58,10 @@ class Registry():
                 return registry_event
 
         logger.info(f"\tDid not find event in Registry.")
+
         return None
 
+    # Removals
     def remove_event(self, event):
         try:
             self.events.remove(event)
@@ -70,14 +74,12 @@ class Registry():
         self.pending_removals = []
 
     def fetch_events(self, *args, **kwargs):
-        # logger.debug(args, kwargs)
         events = []
 
         for source in self.sources.values():
             response = source.list(**kwargs)
 
             for item in response:
-                # pprint(item)
                 events.append(Event(**item))
 
         logger.info(f"Fetched {len(events)} events from sources")
@@ -97,7 +99,9 @@ class Registry():
 
     def check_if_event_is_new(self, event):
         logger.info(f"Checking if event is new: {event}")
+
         if not event.start:
+            # Event must have a date property to be valid
             return
 
         found_event = self.find_event(event)
@@ -122,13 +126,15 @@ class Registry():
 
         return remote_events
 
+
     def check_for_changes(self):
         logger.info("Checking registry for changes.")
 
         for reg_event in self.events:
-            logger.info(f"Checking event {event}")
+            logger.info(f"Checking event {reg_event}")
 
             remote_events = self._get_remote_events(reg_event)
+
             latest_updated_event = sorted(remote_events, key=lambda x: x.updated,
                                           reverse=True)[0]
 
@@ -158,6 +164,9 @@ class Registry():
 
                 diff_event = latest_updated_event - reg_event
 
+                # logger.debug(f"{diff_event.properties}")
+                logger.debug(f"{diff_event=}")
+
                 for source in other_sources:
                     logger.info(f"\t\tUpdating event at {source.name}")
 
@@ -172,7 +181,7 @@ class Registry():
                 logger.info("\tNo changes")
                 new = {}
 
-            event.update(new)
+            reg_event.update(new)
 
         self.apply_removals()
 

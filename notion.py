@@ -1,13 +1,17 @@
 from .source import Source
 
-import datetime
+from datetime import datetime
 import dateutil
 import os
 from pprint import pprint
+import re
 
 # Notion imports
 from notion_client import Client
 from notion_client import APIResponseError
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 class Notion(Source):
@@ -30,6 +34,12 @@ class Notion(Source):
         if properties.get(self.keys['date']):
             start = properties[self.keys['date']]['date']['start']
             end = properties[self.keys['date']]['date']['end']
+
+            if re.fullmatch('\d\d-\d\d-\d\d', end):
+                new_datetime = dateutil.parser.parse(
+                    end) - datetime.timedelta(days=1)
+                end = new_datetime.strftime('%Y-%m-%d')
+
         else:
             start = None
             end = None
@@ -49,20 +59,24 @@ class Notion(Source):
 
     def _prepare_properties(self, properties, **kwargs):
         output = {}
+        date = {}
 
         if 'start' in properties:
-            output[self.keys['date']] = {
-                'date': {
-                    'start': properties['start'],
-                }
-            }
+            date['start'] = properties['start']
 
         if 'end' in properties:
+            end = properties['end']
+
+            if re.fullmatch('\d\d-\d\d-\d\d', end):
+                new_datetime = dateutil.parser.parse(
+                    end) + datetime.timedelta(days=1)
+                end = new_datetime.strftime('%Y-%m-%d')
+
+            date['end'] = end
+
+        if date:
             output[self.keys['date']] = {
-                'date': {
-                    'end': properties['end'],
-                }
-            }
+                'date': date}
 
         if 'title' in properties:
             output[self.keys['title']] = {
@@ -88,6 +102,8 @@ class Notion(Source):
                     }
                 ]
             }
+
+        logger.debug(f"{output=}")
 
         return output
 
@@ -139,7 +155,10 @@ class Notion(Source):
         )
 
     def _patch(self, id, properties):
-        return self.client.pages.patch(
+        logger.debug(f"{id=}")
+        logger.debug(f"{properties=}")
+
+        return self.client.pages.update(
             page_id=id,
             properties=self._prepare_properties(properties)
         )

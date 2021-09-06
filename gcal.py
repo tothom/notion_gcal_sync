@@ -4,6 +4,7 @@ import datetime
 import dateutil
 import os
 from pprint import pprint
+import re
 
 # Google imports
 from googleapiclient.discovery import build
@@ -86,28 +87,27 @@ class GCal(Source):
 
     def _prepare_properties(self, properties):
         output = {}
+        date = {}
+
+        has_date = False
 
         if 'start' in properties:
-            start = properties['start']
-            end = properties['end']
+            start = {'start': properties['start']}
+            has_date = True
 
-            end = end or start  # End time cannot be empty
+        if 'end' in properties:
+            end = {'end': properties['end']}
+            has_date = True
 
-            try:
-                dt = datetime.datetime.strptime(start, '%Y-%m-%d')
-
-            except ValueError as e:
-                gcal_datetime_key = 'dateTime'
-            else:
+        if has_date:
+            if re.fullmatch('\d\d-\d\d-\d\d', date_property):
                 gcal_datetime_key = 'date'
+            else:
+                gcal_datetime_key = 'dateTime'
 
-                if start != end:
-                    new_datetime = dateutil.parser.parse(
-                        end) + datetime.timedelta(days=1)
-                    end = new_datetime.strftime('%Y-%m-%d')
+            date[gcal_datetime_key] = {start, end}
 
-            output['start'] = {gcal_datetime_key: start},
-            output['end'] = {gcal_datetime_key: end}
+            output['date'] = date
 
         if 'title' in properties:
             output['summary'] = properties['title']
