@@ -1,4 +1,7 @@
-import uuid
+from datetime import date, datetime, timedelta
+import dateutil.parser
+import re
+
 from pprint import pprint
 
 import logging
@@ -9,14 +12,15 @@ class Event():
     """docstring for Event."""
 
     def __init__(self, ids={}, title=None, start=None, end=None,
-                 description=None, url=None, updated=None, archived=False
+                 description=None, url=None, updated=None, archived=None
                  ):
         self.ids = ids
-        # self.id = id or str(uuid.uuid4())
         self.updated = updated
         self.title = title
+
         self.start = start
         self.end = end # End property is exclusive
+
         self.description = description
         self.url = url
         self.archived = archived
@@ -39,6 +43,58 @@ class Event():
             'archived': self.archived
         }
 
+    def _isoformat(self, dt):
+        print(type(dt))
+        if not dt:
+            return None
+        elif self.datetime_format == 'date':
+            return dt.strftime('%Y-%m-%d')
+        elif self.datetime_format == 'dateTime':
+            return dt.isoformat()
+
+    @property
+    def start(self):
+        return self._isoformat(self.start_dt)
+
+    @start.setter
+    def start(self, value):
+        self.start_dt = self.validate_datetime_string(value)
+
+    @property
+    def end(self):
+        return self._isoformat(self.end_dt)
+
+    @end.setter
+    def end(self, value):
+        self.end_dt = self.validate_datetime_string(value)
+
+    @property
+    def datetime_format(self):
+        dt = self.start_dt or self.end_dt or None
+
+        if not dt:
+            return None
+        elif isinstance(dt, date):
+            return 'date'
+        elif isinstance(dt, datetime):
+            return 'dateTime'
+
+    def validate_datetime_string(self, dt_str):
+        # print(f"{dt_str=}")
+        if dt_str:
+            try:
+                dt = date.fromisoformat(dt_str)
+            except:
+                try:
+                    dt = dateutil.parser.parse(dt_str)
+                except:
+                    dt = None
+                    raise ValueError(
+                        f"Datetime string '{dt_str}' has unknown format")
+
+            # print(f"{dt=}")
+            return dt
+
     def update(self, delta):
         if not delta:
             return
@@ -51,8 +107,8 @@ class Event():
             self.__dict__.update(delta)
 
     def __sub__(self, other):
-        return Event(**{k:v for k, v in
-            set(self.properties.items()) - set(other.properties.items())})
+        return Event(**{k: v for k, v in
+                        set(self.properties.items()) - set(other.properties.items())})
 
     def __eq__(self, other):
         return self.properties == other.properties

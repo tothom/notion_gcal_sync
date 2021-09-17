@@ -1,7 +1,8 @@
 from .source import Source
+from .event import Event
 
-import datetime
-import dateutil
+# import datetime
+# import dateutil
 import os
 from pprint import pprint
 import re
@@ -12,6 +13,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.errors import HttpError
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 class GCal(Source):
@@ -55,7 +59,7 @@ class GCal(Source):
     def _get_status_code(self, e):
         return e.status_code
 
-    def _read_response(self, response, **kwargs):
+    def _process_response(self, response):
         if not response:
             return
 
@@ -64,18 +68,12 @@ class GCal(Source):
             end = None
         elif response['start'].get('date'):
             start = response['start']['date']
-
-            dt_end = dateutil.parser.parse(response['end']['date'])
-            dt_end = dt_end - datetime.timedelta(days=1)
-            end = dt_end.strftime('%Y-%m-%d')
-
-            if start >= end:
-                end = None
+            end = response['end']['date']
         else:
             start = response['start']['dateTime']
             end = response['end']['dateTime']
 
-        return {
+        return Event(**{
             'title': response.get('summary', ''),
             'description': response.get('description', ''),
             'archived': response['status'] == 'cancelled',
@@ -83,39 +81,19 @@ class GCal(Source):
             'updated': response.get('updated'),
             'start': start,
             'end': end
-        }
+        })
 
-    def _prepare_properties(self, properties):
-        output = {}
-        date = {}
+    def _prepare_request_body(self, event):
+        request_body = {}
 
-        has_date = False
+        date = {event.datetime_format: {
+            'start': event.start, 'end': event.end}}
+        request_body['date'] = date
 
-        if 'start' in properties:
-            start = {'start': properties['start']}
-            has_date = True
+        request_body['summary'] = event.title
+        request_body['description'] = event.description
 
-        if 'end' in properties:
-            end = {'end': properties['end']}
-            has_date = True
-
-        if has_date:
-            if re.fullmatch('\d\d-\d\d-\d\d', date_property):
-                gcal_datetime_key = 'date'
-            else:
-                gcal_datetime_key = 'dateTime'
-
-            date[gcal_datetime_key] = {start, end}
-
-            output['date'] = date
-
-        if 'title' in properties:
-            output['summary'] = properties['title']
-
-        if 'description' in properties:
-            output['description'] = properties['description']
-
-        return output
+        return request_body
 
     def _get_query(self, **kwargs):
         query = {
@@ -146,21 +124,21 @@ class GCal(Source):
     def _create(self, properties):
         return self.client.events().insert(
             calendarId=self.id,
-            body=self._prepare_properties(properties)
+            body=properties
         ).execute()
 
     def _update(self, id, properties):
         return self.client.events().update(
             calendarId=self.id,
             eventId=id,
-            body=self._prepare_properties(properties)
+            body=properties
         ).execute()
 
     def _patch(self, id, properties):
         return self.client.events().patch(
             calendarId=self.id,
             eventId=id,
-            body=self._prepare_properties(properties)
+            body=properties
         ).execute()
 
     def _delete(self, id):

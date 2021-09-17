@@ -111,7 +111,7 @@ class Registry():
             logger.debug(event.__dict__)
 
             for source in [self.sources[key] for key in self.sources.keys() - event.ids.keys()]:
-                new = source.create(event.properties)
+                new = source.create(events)
                 event.update(new)
 
             self.events.append(event)
@@ -120,12 +120,11 @@ class Registry():
         remote_events = []
 
         for name, id in event.ids.items():
-            properties = self.sources[name].get(id)
-            remote_event = Event(**properties)
+            remote_event = self.sources[name].get(id)
+            # remote_event = Event(**properties)
             remote_events.append(remote_event)
 
         return remote_events
-
 
     def check_for_changes(self):
         logger.info("Checking registry for changes.")
@@ -171,7 +170,7 @@ class Registry():
                     logger.info(f"\t\tUpdating event at {source.name}")
 
                     new = source.patch(
-                        reg_event.ids[source.name], diff_event.properties)
+                        reg_event.ids[source.name], diff_event)
 
             elif False:
                 pass
@@ -179,9 +178,11 @@ class Registry():
 
             else:
                 logger.info("\tNo changes")
-                new = {}
+                new = Event()
 
-            reg_event.update(new)
+            print(f"{new=}")
+
+            reg_event.update(new.properties)
 
         self.apply_removals()
 

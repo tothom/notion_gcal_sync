@@ -2,6 +2,8 @@ from pprint import pprint
 import logging
 logger = logging.getLogger(__name__)
 
+from .event import Event
+
 
 class Source():
     """
@@ -13,6 +15,8 @@ class Source():
         self.name = name
         self.token = token
         self.keys = keys
+
+        self.exclusive_end_date = True
 
         self.authenticate()
         self.http_exception = None  # Override with client HTTP Exception
@@ -54,7 +58,7 @@ class Source():
         if not response:
             return {}
         else:
-            return [self._read_response(a) for a in response]
+            return [self._process_response(a) for a in response]
 
     def get(self, id):
         response = self._request(self._get, id)
@@ -62,33 +66,38 @@ class Source():
         if not response:
             return {}
         else:
-            return self._read_response(response)
+            return self._process_response(response)
 
     def create(self, properties):
+        properties = self._prepare_request_body(properties)
+
         response = self._request(self._create, properties)
 
         if not response:
             return {}
         else:
-            return self._read_response(response)
+            return self._process_response(response)
 
     def update(self, id, properties):
+        properties = self._prepare_request_body(properties)
+
         response = self._request(self._update, id, properties)
 
         if not response:
             return {}
         else:
-            return self._read_response(response)
+            return self._process_response(response)
 
     def patch(self, id, properties):
-        properties = self.clean_properties(properties)
+        properties = self._prepare_request_body(properties)
+        properties = self._clean_dict(properties)
 
         response = self._request(self._patch, id, properties)
 
         if not response:
             return {}
         else:
-            return self._read_response(response)
+            return self._process_response(response)
 
     def delete(self, id):
         response = self._request(self._delete, id)
@@ -96,17 +105,32 @@ class Source():
         if not response:
             return {}
         else:
-            return self._read_response(response)
+            return self._process_response(response)
+
+    def _clean_dict(self, _dict):
+        """
+        https://stackoverflow.com/questions/33797126/proper-way-to-remove-keys-in-dictionary-with-none-values-in-python
+        """
+        for key, value in list(_dict.items()):
+            if isinstance(value, dict):
+                self._clean_dict(value)
+            elif value is None:
+                del _dict[key]
+            elif isinstance(value, list):
+                for v in value:
+                    self._clean_dict(v)
+
+        return _dict
 
     """All methods below must be overridden"""
 
     def authenticate(self):
-        """Should return a http client"""
+        """Should return a http client. Must be overridden"""
         self.client = None
 
-    def _read_response(self, response):
+    def _process_response(self, response):
         """Read client response and return an event dictionary.
-        Please override..."""
+        Please override... Must return an Event"""
         return {
             'title': response.get('title', ''),
             'description': response.get('description', ''),
@@ -117,15 +141,13 @@ class Source():
             'end': reponse.get('end')
         }
 
-    def _prepare_properties(self, properties):
+    def _prepare_request_body(self, event):
+        """Please override..."""
         return {}
 
-    def clean_properties(self, properties):
-        return {k: v for k, v in properties.items() if v is not None}
-
-
     def _get_status_code(self, e):
-        """Update to return http status codes
+        """Update to return http status codes. Override if status code is in
+        other attribute.
         """
         return e.status
 
@@ -134,7 +156,6 @@ class Source():
 
     def _list(self, query):
         """Override this class with custom client method."""
-
         return self.client.list(
             id=self.id,
             **query
@@ -142,29 +163,25 @@ class Source():
 
     def _get(self, id):
         """Override this class with custom client method."""
-
         return self.client.get(
             id=id
         )
 
     def _create(self, properties):
         """Override this class with custom client method."""
-
         return self.client.create(
-            properties=self._prepare_properties(properties)
+            properties=properties
         )
 
     def _update(self, id, properties):
         """Override this class with custom client method."""
-
         return self.client.update(
             id=id,
-            properties=self._prepare_properties(properties)
+            properties=properties
         )
 
     def _delete(self, id):
         """Override this class with custom client method."""
-
         return self.client.delete(
             id=id
         )

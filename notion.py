@@ -1,6 +1,7 @@
 from .source import Source
+from .event import Event
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import dateutil
 import os
 from pprint import pprint
@@ -25,87 +26,73 @@ class Notion(Source):
     def authenticate(self):
         self.client = Client(auth=self.token)
 
-    def _read_response(self, response, **kwargs):
+    def _process_response(self, response):
         if not response:
             return
 
         properties = response.get('properties')
 
-        if properties.get(self.keys['date']):
-            start = properties[self.keys['date']]['date']['start']
-            end = properties[self.keys['date']]['date']['end']
-
-            if re.fullmatch('\d\d-\d\d-\d\d', end):
-                new_datetime = dateutil.parser.parse(
-                    end) - datetime.timedelta(days=1)
-                end = new_datetime.strftime('%Y-%m-%d')
-
-        else:
-            start = None
-            end = None
-
-        return {
+        event = Event(**{
             'title': ', '.join([a.get('plain_text', '')
                                 for a in properties[self.keys['title']]['title']]),
             'description': ', '.join([a.get('plain_text', '')
                                       for a in properties[self.keys['description']]['rich_text']]),
-            'start': start,
-            'end': end,
             'archived': response['archived'],
             'ids': {self.name: response['id']},
             'updated': response['last_edited_time'],
             'url': response['url']
-        }
+        })
 
-    def _prepare_properties(self, properties, **kwargs):
-        output = {}
-        date = {}
+        if properties.get(self.keys['date']):
+            event.start = properties[self.keys['date']]['date']['start']
+            event.end = properties[self.keys['date']]['date']['end']
 
-        if 'start' in properties:
-            date['start'] = properties['start']
+            if event.end and event.datetime_format == 'date':
+                event.end_dt -= timedelta(days=1)
 
-        if 'end' in properties:
-            end = properties['end']
+        return event
 
-            if re.fullmatch('\d\d-\d\d-\d\d', end):
-                new_datetime = dateutil.parser.parse(
-                    end) + datetime.timedelta(days=1)
-                end = new_datetime.strftime('%Y-%m-%d')
-
-            date['end'] = end
-
-        if date:
-            output[self.keys['date']] = {
-                'date': date}
-
-        if 'title' in properties:
-            output[self.keys['title']] = {
+    def _prepare_request_body(self, event):
+        request_body = {
+            self.keys['title']: {
                 "title": [
                     {
                         "type": "text",
                         "text": {
-                            "content": properties['title']
-                        }
+                            "content": event.title}
                     }
                 ]
-            }
+            },
 
-        if 'description' in properties:
-            output[self.keys['description']] = {
+            self.keys['description']: {
                 "type": "rich_text",
                 "rich_text": [
                     {
                         "type": "text",
                         "text": {
-                            "content": properties['description']
+                            "content": event.description
                         }
                     }
                 ]
             }
+        }
 
-        logger.debug(f"{output=}")
+        date = {}
 
-        return output
+        date['start'] = event.start
+
+        try:
+            if event.datetime_format == 'date':
+                event.end_dt -= timedelta(days=1)
+        finally:
+            date['end'] = end
+
+        request_body[self.keys['date']] = {
+            'date': date}
+
+        logger.debug(f"{request_body=}")
+
+        return request_body
 
     def _get_query(self, **kwargs):
         return {
@@ -116,8 +103,6 @@ class Notion(Source):
                 }
             }
         }
-
-        pass
 
         return {
             'filter': {
@@ -145,13 +130,13 @@ class Notion(Source):
     def _create(self, properties):
         return self.client.pages.create(
             parent={"database_id": self.id},
-            properties=self._prepare_properties(properties)
+            properties=properties
         )
 
     def _update(self, id, properties):
         return self.client.pages.update(
             page_id=id,
-            properties=self._prepare_properties(properties)
+            properties=properties
         )
 
     def _patch(self, id, properties):
@@ -160,7 +145,7 @@ class Notion(Source):
 
         return self.client.pages.update(
             page_id=id,
-            properties=self._prepare_properties(properties)
+            properties=properties
         )
 
     def _delete(self, id):
