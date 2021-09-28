@@ -2,7 +2,7 @@ from pprint import pprint
 import logging
 logger = logging.getLogger(__name__)
 
-from .event import Event
+# from .event import Event
 
 
 class Source():
@@ -71,6 +71,8 @@ class Source():
     def create(self, properties):
         properties = self._prepare_request_body(properties)
 
+        logger.debug(f"{properties=}")
+
         response = self._request(self._create, properties)
 
         if not response:
@@ -90,7 +92,7 @@ class Source():
 
     def patch(self, id, properties):
         properties = self._prepare_request_body(properties)
-        properties = self._clean_dict(properties)
+        # properties = self._clean_dict(properties)
 
         response = self._request(self._patch, id, properties)
 

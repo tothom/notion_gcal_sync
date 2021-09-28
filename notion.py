@@ -1,7 +1,8 @@
 from .source import Source
-from .event import Event
+# from .event import Event
+from .helpers import *
 
-from datetime import datetime, timedelta
+import datetime
 import dateutil
 import os
 from pprint import pprint
@@ -30,65 +31,102 @@ class Notion(Source):
         if not response:
             return
 
+        # pprint(response)
+
         properties = response.get('properties')
 
-        event = Event(**{
+        date = None
+
+        if properties.get(self.keys['date']):
+            start = properties[self.keys['date']]['date']['start']
+            end = properties[self.keys['date']]['date']['end']
+
+            # try:
+            #     start = parse_datetime_str(start)
+            # except:
+            #     pass
+
+            # if end is not None:
+            #     end_dt = parse_datetime_str(end)
+            #
+            #     if isinstance(end_dt, datetime.date):
+            #         end_dt += timedelta(days=1)
+            #         end = end_dt.isoformat()
+
+            date = {'start': start, 'end': end}
+
+
+        return {
             'title': ', '.join([a.get('plain_text', '')
                                 for a in properties[self.keys['title']]['title']]),
             'description': ', '.join([a.get('plain_text', '')
                                       for a in properties[self.keys['description']]['rich_text']]),
+            'date': date,
             'archived': response['archived'],
             'ids': {self.name: response['id']},
             'updated': response['last_edited_time'],
-            'url': response['url']
-        })
-
-        if properties.get(self.keys['date']):
-            event.start = properties[self.keys['date']]['date']['start']
-            event.end = properties[self.keys['date']]['date']['end']
-
-            if event.end and event.datetime_format == 'date':
-                event.end_dt -= timedelta(days=1)
-
-        return event
+            'url': response['url'],
+        }
 
     def _prepare_request_body(self, event):
-        request_body = {
-            self.keys['title']: {
-                "title": [
-                    {
-                        "type": "text",
-                        "text": {
-                            "content": event.title}
-                    }
-                ]
-            },
+        request_body = {}
 
-            self.keys['description']: {
-                "type": "rich_text",
-                "rich_text": [
-                    {
-                        "type": "text",
-                        "text": {
-                            "content": event.description
+        if 'title' in event:
+            title = {
+                self.keys['title']: {
+                    "title": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": event['title']
+                            }
                         }
-                    }
-                ]
+                    ]
+                }
             }
-        }
+
+            request_body.update(title)
+
+        if 'description' in event:
+            description = {
+                self.keys['description']: {
+                    "type": "rich_text",
+                    "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": event['description']
+                                }
+                            }
+                    ]
+                }
+            }
+
+            request_body.update(description)
 
         date = {}
 
-        date['start'] = event.start
+        if 'date' in event:
+            if event['date'] == None:
+                pass
+            else:
+                start = event['date'].get('start')
+                end = event['date'].get('end')
 
-        try:
-            if event.datetime_format == 'date':
-                event.end_dt -= timedelta(days=1)
-        finally:
-            date['end'] = end
+                # if end is not None:
+                #     end_dt = parse_datetime_str(end)
+                #
+                #     if isinstance(end_dt, datetime.date):
+                #         end_dt -= timedelta(days=1)
+                #
+                #     end = end_dt.isoformat()
 
-        request_body[self.keys['date']] = {
-            'date': date}
+                request_body[self.keys['date']] = {
+                    'date': {
+                        'start': start,
+                        'end': end
+                    }
+                }
 
         logger.debug(f"{request_body=}")
 

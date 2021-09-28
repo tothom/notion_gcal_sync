@@ -1,5 +1,8 @@
 from types import SimpleNamespace
 import yaml
+from datetime import date, datetime, timedelta
+import dateutil.parser
+import re
 
 import logging
 
@@ -30,3 +33,16 @@ def load_config(file_name='config.yaml'):
 
 def create_config(file_name='config.yaml'):
     pass
+
+def parse_datetime_str(dt_str):
+    if re.fullmatch('\d{4}-\d{2}-\d{2}', dt_str):
+        return date.fromisoformat(dt_str)
+    else:
+        return dateutil.parser.parse(dt_str)
+
+def dict_diff(a, b):
+    for key in b.keys():
+        if a[key] != b[key]:
+            a[key] = b[key]
+
+    return a
