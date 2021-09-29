@@ -71,7 +71,7 @@ class Source():
     def create(self, properties):
         properties = self._prepare_request_body(properties)
 
-        logger.debug(f"{properties=}")
+        # logger.debug(f"{properties=}")
 
         response = self._request(self._create, properties)
 

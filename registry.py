@@ -37,27 +37,6 @@ class Registry():
                 table = json.load(file)
 
             for event in table['events']:
-                if not 'date' in event.keys():
-                    start = event['start']
-                    end = event['end']
-
-                    # if end:
-                    #     end_dt = parse_datetime_str(end)
-                    #     if isinstance(end_dt, datetime.date):
-                    #         end_dt += timedelta(days=1)
-                    #         end = end_dt.isoformat()
-
-                    date = {
-                        'start': event['start'],
-                        'end': event['end']
-                        }
-
-                    event['date'] = date
-
-                    del event['start']
-                    del event['end']
-
-
                 self.events.append(event)
 
             # self.events = [a for a in table['events']]
@@ -103,6 +82,8 @@ class Registry():
     #     self.pending_removals = []
 
     def fetch_events(self, *args, **kwargs):
+        logger.info(f"Fetching events from sources: {self.sources.keys()}")
+
         events = []
 
         for source in self.sources.values():
@@ -133,7 +114,7 @@ class Registry():
     def check_if_event_is_new(self, event):
         logger.info(f"Checking if event is new: {event['title']}")
 
-        if not event.get('date'):
+        if not event.get('date') or event.get('archived'):
             # Event must have a date property to be valid
             return
 
@@ -143,27 +124,33 @@ class Registry():
             logger.info("\tEvent is new. Adding to registry.")
             logger.debug(event)
 
-            # for source in [self.sources[key] for key in self.sources.keys() - event['ids'].keys()]:
-            #     new = source.create(events)
-            #     # ids = event.ids | new.ids
-            #     # event.update(new)
-            #     event['ids'].update(new.ids)
+            for source in [self.sources[key] for key in self.sources.keys() - event['ids'].keys()]:
+                new = source.create(event)
+                # ids = event.ids | new.ids
+                # event.update(new)
+                event['ids'].update(new['ids'])
 
             self.events.append(event)
 
     def clean_registry(self):
+        logger.info(f"Cleaning registry")
+
         deletions = []
 
         for event in self.events:
+            logger.debug(f"{event=}")
 
-            if len(event['ids']) < len(self.sources):
+            # logger.debug()
 
-                for source_name, source in self.sources.items():
-                    if not source_name in event['ids'] and event['date']:
-                        new = source.create(event)
-                        event['ids'].update(new['ids'])
+            # if len(event['ids']) < len(self.sources):
+            #
+            #     for source_name, source in self.sources.items():
+            #
+            #         if not source_name in event['ids'] and event['date'] != None:
+            #             new = source.create(event)
+            #             event['ids'].update(new['ids'])
 
-            elif event['date']['start'] < self.time_min:
+            if event['date']['start'] < self.time_min:
                 deletions.append(event)
 
         for deletion in deletions:
@@ -186,6 +173,8 @@ class Registry():
         for reg_event in self.events:
             logger.info(f"Checking event {reg_event['title']}")
 
+            logger.debug(f"{reg_event=}")
+
             # Fetch remote events
             remotes = []
 
@@ -193,6 +182,8 @@ class Registry():
 
             for name, id in reg_event['ids'].items():
                 remote = self.sources[name].get(id)
+
+                logger.debug(f"{remote=}")
 
                 if remote:
                     remotes.append(remote)
@@ -205,12 +196,12 @@ class Registry():
             diff = {}
 
             for remote in sorted(remotes, key=lambda x:x['updated']):
-                for key in remote.keys() - 'ids':
+                for key in ['title', 'description', 'date', 'archived']:
                     value = remote[key]
                     if value != reg_event.get(key):
                         diff[key] = value
 
-            logger.debug(diff)
+            logger.debug(f"{diff=}")
 
             if diff:
                 for source_name, event_id in reg_event['ids'].items():
@@ -218,65 +209,6 @@ class Registry():
                     source.patch(event_id, diff)
 
                 reg_event.update(diff)
-
-            # {key: value for key, value in diff.items() if value != reg_event.get(key)}
-
-                    # else:
-                    #     # if value != diff[key] and remove:
-                    #     if remote['updated'] > diff['updated']:
-                    #         diff[key] = value
-                            # status = 'updated'
-
-
-                # remotes.append(remote_event)
-                # remotes = self._get_remote_events(reg_event)
-
-            # TODO: What if remote event is not found?
-
-            # latest_event = sorted(remote_events, key=lambda x: x['updated'],
-            #                               reverse=True)[0]
-
-            # other_sources = [self.sources[key] for key in
-            #                  self.sources.keys() - latest_event['ids'].keys()]
-
-            # if latest_event.get('archived'):
-            #     logger.info("\tEvent is DELETED")
-            #
-            #     for source in other_sources:
-            #         logger.info(f"\t\tDeleting event at {source.name}")
-            #         source.delete(reg_event['ids'][source.name])
-            #
-            #     self.pending_removals.append(reg_event)
-
-            # if not latest_event['date']:
-            #     logger.info("\tEvent misses date property")
-            #
-            #     for source in other_sources:
-            #         logger.info(f"\t\tDeleting event at {source.name}")
-            #         source.delete(reg_event['ids'][source.name])
-            #
-            #     self.pending_removals.append(event)
-            #
-            # elif latest_event['updated'] > reg_event['updated']:
-            #     logger.info("\tEvent has been UPDATED")
-            #
-            #     diff_event = {k: v for k, v in latest_event.items() if v != reg_event[k]}
-            #
-            #     for source in other_sources:
-            #         logger.info(f"\t\tUpdating event at {source.name}")
-            #
-            #         new = source.patch(
-            #             reg_event['ids'][source.name], diff_event)
-            #
-            #     reg_event.update(diff_event)
-            #
-            # elif False:
-            #     pass
-            #     # Event has expired from Registry
-            # else:
-            #     logger.info("\tNo changes")
-
-        # self.apply_removals()
 
     def sync(self):
         now = datetime.datetime.now().isoformat() + 'Z'

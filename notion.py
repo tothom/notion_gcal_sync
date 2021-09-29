@@ -128,7 +128,10 @@ class Notion(Source):
                     }
                 }
 
-        logger.debug(f"{request_body=}")
+        # logger.debug(f"{request_body=}")
+
+        if 'archived' in event:
+            request_body['archived'] = event['archived']
 
         return request_body
 
@@ -178,8 +181,8 @@ class Notion(Source):
         )
 
     def _patch(self, id, properties):
-        logger.debug(f"{id=}")
-        logger.debug(f"{properties=}")
+        # logger.debug(f"{id=}")
+        # logger.debug(f"{properties=}")
 
         return self.client.pages.update(
             page_id=id,

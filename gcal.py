@@ -71,15 +71,18 @@ class GCal(Source):
             start = response['start']['date']
             end = response['end']['date']
 
-            # end_dt = parse_datetime_str(end)
-            # end_dt -= datetime.timedelta(days=1)
-            # end = end_dt.isoformat()
+            end_dt = parse_datetime_str(end)
+            end_dt -= datetime.timedelta(days=1)
+            end = end_dt.isoformat()
 
-            if end == start:
-                end == None
+            # if end == start:
+            #     end == None
         else:
             start = response['start']['dateTime']
             end = response['end']['dateTime']
+
+        if end == start:
+            end == None
 
         return {
             'title': response.get('summary', ''),
@@ -102,6 +105,7 @@ class GCal(Source):
         if 'date' in event:
             if event['date'] == None:
                 request_body['status'] = 'cancelled'
+
             else:
                 # if 'start' in event['date']:
                 start = event['date']['start']
@@ -116,23 +120,40 @@ class GCal(Source):
                 # if start:
                     dt = parse_datetime_str(start)
 
-                    format = {datetime.date: 'date',
-                              datetime.datetime: 'dateTime'}[type(dt)]
+                    # format_dict = {datetime.date: 'date',
+                    #           datetime.datetime: 'dateTime'}
 
-                    # if format == 'date':
-                    #     end_dt = parse_datetime_str(end)
-                    #     end_dt += datetime.timedelta(days=1)
-                    #     end = end_dt.isoformat()
+                    if isinstance(dt, datetime.date):
+                        format = 'date'
+                        other_format = 'dateTime'
+                    elif isinstance(dt, datetime.datetime):
+                        format = 'dateTime'
+                        other_format = 'date'
+
+
+                    if format == 'date':
+                        end_dt = parse_datetime_str(end)
+                        end_dt += datetime.timedelta(days=1)
+                        end = end_dt.isoformat()
 
                     request_body['start'] = {
-                        format: start
+                        format: start,
+                        other_format: None
                     }
 
                     request_body['end'] = {
-                        format: end
+                        format: end,
+                        other_format: None
                     }
 
         # logger.debug(f"{request_body=}")
+        if 'archived' in event:
+            if event['archived']:
+                request_body['status'] = 'cancelled'
+            if not event['archived']:
+                request_body['status'] = 'confirmed'
+
+        logger.debug(f"{request_body=}")
 
         return request_body
 
