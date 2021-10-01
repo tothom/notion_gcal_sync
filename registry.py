@@ -124,11 +124,11 @@ class Registry():
             logger.info("\tEvent is new. Adding to registry.")
             logger.debug(event)
 
-            for source in [self.sources[key] for key in self.sources.keys() - event['ids'].keys()]:
-                new = source.create(event)
-                # ids = event.ids | new.ids
-                # event.update(new)
-                event['ids'].update(new['ids'])
+            # for source in [self.sources[key] for key in self.sources.keys() - event['ids'].keys()]:
+            #     new = source.create(event)
+            #     # ids = event.ids | new.ids
+            #     # event.update(new)
+            #     event['ids'].update(new['ids'])
 
             self.events.append(event)
 
@@ -141,16 +141,14 @@ class Registry():
             logger.debug(f"{event=}")
 
             # logger.debug()
+            missing_event_source_keys = self.sources.keys() - event['ids'].keys()
 
-            # if len(event['ids']) < len(self.sources):
-            #
-            #     for source_name, source in self.sources.items():
-            #
-            #         if not source_name in event['ids'] and event['date'] != None:
-            #             new = source.create(event)
-            #             event['ids'].update(new['ids'])
+            if missing_event_source_keys:
+                for key in missing_event_source_keys:
+                    new = self.sources[key].create(event)
+                    event['ids'].update(new['ids'])
 
-            if event['date']['start'] < self.time_min:
+            elif event['date']['start'] < self.time_min:
                 deletions.append(event)
 
         for deletion in deletions:

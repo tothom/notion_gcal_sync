@@ -51,6 +51,7 @@ class Source():
         return response
 
     def list(self, **kwargs):
+        
         query = self._get_query(**kwargs)
 
         response = self._request(self._list, query)
@@ -69,11 +70,11 @@ class Source():
             return self._process_response(response)
 
     def create(self, properties):
-        properties = self._prepare_request_body(properties)
+        request_properties = self._prepare_request(properties)
 
         # logger.debug(f"{properties=}")
 
-        response = self._request(self._create, properties)
+        response = self._request(self._create, **request_properties)
 
         if not response:
             return {}
@@ -81,9 +82,9 @@ class Source():
             return self._process_response(response)
 
     def update(self, id, properties):
-        properties = self._prepare_request_body(properties)
+        request_properties = self._prepare_request(properties)
 
-        response = self._request(self._update, id, properties)
+        response = self._request(self._update, id, **request_properties)
 
         if not response:
             return {}
@@ -91,10 +92,10 @@ class Source():
             return self._process_response(response)
 
     def patch(self, id, properties):
-        properties = self._prepare_request_body(properties)
+        request_properties = self._prepare_request(properties)
         # properties = self._clean_dict(properties)
 
-        response = self._request(self._patch, id, properties)
+        response = self._request(self._patch, id, **request_properties)
 
         if not response:
             return {}
@@ -143,7 +144,7 @@ class Source():
             'end': reponse.get('end')
         }
 
-    def _prepare_request_body(self, event):
+    def _prepare_request(self, event):
         """Please override..."""
         return {}
 

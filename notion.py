@@ -68,8 +68,12 @@ class Notion(Source):
             'url': response['url'],
         }
 
-    def _prepare_request_body(self, event):
-        request_body = {}
+    def _prepare_request(self, event):
+        properties = {}
+
+
+
+
 
         if 'title' in event:
             title = {
@@ -85,7 +89,7 @@ class Notion(Source):
                 }
             }
 
-            request_body.update(title)
+            properties.update(title)
 
         if 'description' in event:
             description = {
@@ -102,7 +106,7 @@ class Notion(Source):
                 }
             }
 
-            request_body.update(description)
+            properties.update(description)
 
         date = {}
 
@@ -121,19 +125,21 @@ class Notion(Source):
                 #
                 #     end = end_dt.isoformat()
 
-                request_body[self.keys['date']] = {
+                properties[self.keys['date']] = {
                     'date': {
                         'start': start,
                         'end': end
                     }
                 }
 
-        # logger.debug(f"{request_body=}")
+        # logger.debug(f"{properties=}")
+
+        attributes = {}
 
         if 'archived' in event:
-            request_body['archived'] = event['archived']
+            attributes['archived'] = event['archived']
 
-        return request_body
+        return {'properties': properties} | attributes
 
     def _get_query(self, **kwargs):
         return {
@@ -174,23 +180,25 @@ class Notion(Source):
             properties=properties
         )
 
-    def _update(self, id, properties):
-        return self.client.pages.update(
-            page_id=id,
-            properties=properties
-        )
+    # def _update(self, id, properties):
+    #     return self.client.pages.update(
+    #         page_id=id,
+    #         properties=properties
+    #     )
 
-    def _patch(self, id, properties):
+    def _patch(self, id, properties, **attributes):
         # logger.debug(f"{id=}")
         # logger.debug(f"{properties=}")
+        # if archived
 
         return self.client.pages.update(
             page_id=id,
-            properties=properties
+            properties=properties,
+            **attributes
         )
 
-    def _delete(self, id):
-        return self.client.pages.update(
-            page_id=id,
-            archived=True
-        )
+    # def _delete(self, id):
+    #     return self.client.pages.update(
+    #         page_id=id,
+    #         archived=True
+    #     )

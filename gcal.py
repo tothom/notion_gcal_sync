@@ -93,69 +93,67 @@ class GCal(Source):
             'updated': response.get('updated'),
         }
 
-    def _prepare_request_body(self, event):
-        request_body = {}
+    def _prepare_request(self, event):
+        properties = {}
 
         if 'title' in event:
-            request_body['summary'] = event['title']
+            properties['summary'] = event['title']
 
         if 'description' in event:
-            request_body['description'] = event['description']
+            properties['description'] = event['description']
 
         if 'date' in event:
             if event['date'] == None:
-                request_body['status'] = 'cancelled'
+                properties['status'] = 'cancelled'
 
             else:
-                # if 'start' in event['date']:
+
                 start = event['date']['start']
                 end = event['date']['end']
 
                 if start:
-                    # request_body['status'] = 'cancelled'
-                    # end = event['date']['end']
                     if end == None:
-                        # dt = parse_datetime_str(start) + timedelta(days=)
                         end = start
-                # if start:
+
                     dt = parse_datetime_str(start)
+
+                    logger.debug(dt.__repr__())
 
                     # format_dict = {datetime.date: 'date',
                     #           datetime.datetime: 'dateTime'}
 
-                    if isinstance(dt, datetime.date):
+                    if type(dt) == datetime.date:
                         format = 'date'
                         other_format = 'dateTime'
-                    elif isinstance(dt, datetime.datetime):
+                    elif type(dt) == datetime.datetime:
                         format = 'dateTime'
                         other_format = 'date'
-
 
                     if format == 'date':
                         end_dt = parse_datetime_str(end)
                         end_dt += datetime.timedelta(days=1)
                         end = end_dt.isoformat()
 
-                    request_body['start'] = {
+                    properties['start'] = {
                         format: start,
                         other_format: None
                     }
 
-                    request_body['end'] = {
+                    properties['end'] = {
                         format: end,
                         other_format: None
                     }
 
-        # logger.debug(f"{request_body=}")
+        # logger.debug(f"{properties=}")
         if 'archived' in event:
             if event['archived']:
-                request_body['status'] = 'cancelled'
+                properties['status'] = 'cancelled'
             if not event['archived']:
-                request_body['status'] = 'confirmed'
+                properties['status'] = 'confirmed'
 
-        logger.debug(f"{request_body=}")
+        logger.debug(f"{properties=}")
 
-        return request_body
+        return {'properties': properties}
 
     def _get_query(self, **kwargs):
         query = {
@@ -183,28 +181,28 @@ class GCal(Source):
             eventId=id
         ).execute()
 
-    def _create(self, properties):
+    def _create(self, properties, **kwargs):
         return self.client.events().insert(
             calendarId=self.id,
             body=properties
         ).execute()
 
-    def _update(self, id, properties):
-        return self.client.events().update(
-            calendarId=self.id,
-            eventId=id,
-            body=properties
-        ).execute()
+    # def _update(self, id, properties):
+    #     return self.client.events().update(
+    #         calendarId=self.id,
+    #         eventId=id,
+    #         body=properties
+    #     ).execute()
 
-    def _patch(self, id, properties):
+    def _patch(self, id, properties, **kwargs):
         return self.client.events().patch(
             calendarId=self.id,
             eventId=id,
             body=properties
         ).execute()
 
-    def _delete(self, id):
-        return self.client.events().delete(
-            calendarId=self.id,
-            eventId=id,
-        ).execute()
+    # def _delete(self, id):
+    #     return self.client.events().delete(
+    #         calendarId=self.id,
+    #         eventId=id,
+    #     ).execute()
