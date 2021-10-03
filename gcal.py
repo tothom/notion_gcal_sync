@@ -57,8 +57,11 @@ class GCal(Source):
 
         self.client = build('calendar', 'v3', credentials=self.creds)
 
-    def _get_status_code(self, e):
-        return e.status_code
+
+
+    def _set_status_code(self, e):
+        self.status_code = e.status_code
+        # return e.status_code
 
     def _process_response(self, response):
         if not response:

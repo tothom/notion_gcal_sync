@@ -10,6 +10,7 @@ class Source():
     Base class for database sources.
     """
 
+
     def __init__(self, name, id, token, keys={}):
         self.id = id
         self.name = name
@@ -25,33 +26,39 @@ class Source():
         logger.debug(f"{args=}")
         logger.debug(f"{kwargs=}")
 
+        response = {}
+
         try:
             response = request_method(*args, **kwargs)
 
         except self.http_exception as e:
-            status_code = self._get_status_code(e)
-            print(f"{status_code} {type(e)}: {e}")
+            status_code = self._set_status_code(e)
+            logger.info(f"{status_code} {type(e)}: {e}")
 
-            if status_code == 400:
-                # Bad request
-                raise e
-            elif status_code == 404:
-                # Not found
-                pass
-            elif status_code == 410:
-                # Event deleted
-                pass
-            else:
-                raise e
+            raise
 
-            response = {}
+            # if status_code == 400:
+            #     # Bad request
+            #     raise e
+            # elif status_code == 404:
+            #     # Not found
+            #     status = 'not found'
+            # elif status_code == 410:
+            #     # Event deleted
+            #     status = 'deleted'
+            # else:
+            #     raise e
+
+        #     # response = {}
+        # else:
+        #     status = 'ok'
 
         # logger.debug(response)
 
         return response
 
     def list(self, **kwargs):
-        
+
         query = self._get_query(**kwargs)
 
         response = self._request(self._list, query)
@@ -148,11 +155,12 @@ class Source():
         """Please override..."""
         return {}
 
-    def _get_status_code(self, e):
+    def _set_status_code(self, e):
         """Update to return http status codes. Override if status code is in
         other attribute.
         """
-        return e.status
+        self.status_code = e.status
+        # return e.status
 
     def _get_query(self, **kwargs):
         pass

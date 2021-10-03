@@ -3,12 +3,14 @@ import yaml
 from datetime import date, datetime, timedelta
 import dateutil.parser
 import re
+import sys
 
 import logging
 
 logging.basicConfig(
     filename='notion_gcal_sync.log',
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    # stream=sys.stdout,
     encoding='utf-8',
     level=logging.INFO)
 

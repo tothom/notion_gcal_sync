@@ -160,8 +160,9 @@ class Notion(Source):
             }
         }
 
-    def _get_error_code(self, e):
-        return e.status
+    def _set_status_code(self, e):
+        self.status_code = e.status
+        # return e.status
 
     def _list(self, query):
         return self.client.databases.query(
@@ -174,7 +175,7 @@ class Notion(Source):
             page_id=id
         )
 
-    def _create(self, properties):
+    def _create(self, properties, **attributes):
         return self.client.pages.create(
             parent={"database_id": self.id},
             properties=properties

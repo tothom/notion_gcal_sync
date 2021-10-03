@@ -7,8 +7,6 @@ from pprint import pprint
 import datetime
 
 
-
-
 import logging
 logger = logging.getLogger(__name__)
 
@@ -69,18 +67,6 @@ class Registry():
 
         return None
 
-    # Removals
-    # def remove_event(self, event):
-    #     try:
-    #         self.events.remove(event) ## TODO: Maybe wrong...
-    #     except:
-    #         logger.info(f"Event {event['title']} not removed from registry")
-    #
-    # def apply_removals(self):
-    #     for event in self.pending_removals:
-    #         self.remove_event(event)
-    #     self.pending_removals = []
-
     def fetch_events(self, *args, **kwargs):
         logger.info(f"Fetching events from sources: {self.sources.keys()}")
 
@@ -109,28 +95,20 @@ class Registry():
         events = self.fetch_events(time_min=self.time_min)
 
         for event in events:
-            result = self.check_if_event_is_new(event)
+            logger.info(f"Checking if event is new: {event['title']}")
 
-    def check_if_event_is_new(self, event):
-        logger.info(f"Checking if event is new: {event['title']}")
-
-        if not event.get('date') or event.get('archived'):
             # Event must have a date property to be valid
-            return
+            # Archived events are also not synchronised. Unarchive to synchronise.
+            if not event.get('date') or event.get('archived'):
+                return
 
-        found_event = self.find_event_in_registry(event)
+            found_event = self.find_event_in_registry(event)
 
-        if not found_event:
-            logger.info("\tEvent is new. Adding to registry.")
-            logger.debug(event)
+            if not found_event:  # Event is new if it's not found in registry
+                logger.info("\tEvent is new. Adding to registry.")
+                logger.debug(event)
 
-            # for source in [self.sources[key] for key in self.sources.keys() - event['ids'].keys()]:
-            #     new = source.create(event)
-            #     # ids = event.ids | new.ids
-            #     # event.update(new)
-            #     event['ids'].update(new['ids'])
-
-            self.events.append(event)
+                self.events.append(event)
 
     def clean_registry(self):
         logger.info(f"Cleaning registry")
@@ -140,61 +118,69 @@ class Registry():
         for event in self.events:
             logger.debug(f"{event=}")
 
-            # logger.debug()
-            missing_event_source_keys = self.sources.keys() - event['ids'].keys()
+            if event == None:
+                deletions.append(event)
+            # Remove old events from synchronisation...
+            elif event['date']['start'] < self.time_min:
+                deletions.append(event)
+            else:
+                missing_event_source_keys = self.sources.keys() - \
+                    event['ids'].keys()
 
-            if missing_event_source_keys:
                 for key in missing_event_source_keys:
                     new = self.sources[key].create(event)
                     event['ids'].update(new['ids'])
 
-            elif event['date']['start'] < self.time_min:
-                deletions.append(event)
-
         for deletion in deletions:
             self.events.remove(deletion)
-
-
-    def _get_remote_events(self, event):
-        remote_events = []
-
-        for name, id in event['ids'].items():
-            remote_event = self.sources[name].get(id)
-            # remote_event = Event(**properties)
-            remote_events.append(remote_event)
-
-        return remote_events
 
     def check_for_changes(self):
         logger.info("Checking registry for changes.")
 
-        for reg_event in self.events:
-            logger.info(f"Checking event {reg_event['title']}")
+        event_deletions = []
 
+        for index, reg_event in enumerate(self.events):
+            logger.info(f"Checking event {reg_event['title']}")
             logger.debug(f"{reg_event=}")
 
-            # Fetch remote events
-            remotes = []
+            remotes = {
+                'ok': [],
+                'not found': [],
+                'deleted': []
+                }
 
-            deletions = []
+            source_deletions = []
 
             for name, id in reg_event['ids'].items():
-                remote = self.sources[name].get(id)
+                source = self.sources[name]
 
-                logger.debug(f"{remote=}")
+                try:
+                    remote = source.get(id)
+                except source.http_exception:
+                    if source.status_code == 404:
+                        remotes['not found'].append({name: id})
+                        # remote['status'] = 'not found'
+                    elif source.status_code == 410:
+                        remotes['deleted'].append({name: id})
+                        # remote['status'] = 'deleted'
+                    else:
+                        raise
+                    source_deletions.append(name)
+                else:
+                    # remote['status'] = 'ok'
+                    remotes['ok'].append(remote)
+                    logger.debug(f"{remote=}")
 
-                if remote:
-                    remotes.append(remote)
-                else: # No response from server because event is not found or have been deleted.
-                    deletions.append(name)
-
-            for deletion in deletions:
+            for name in source_deletions:
                 del reg_event['ids'][name]
 
             diff = {}
 
-            for remote in sorted(remotes, key=lambda x:x['updated']):
-                for key in ['title', 'description', 'date', 'archived']:
+            logger.debug(f"{remotes=}")
+
+            for remote in sorted(remotes['ok'], key=lambda x: x['updated']):
+                # 'description' as been removed from sync...
+                for key in ['title', 'date', 'archived']:
                     value = remote[key]
                     if value != reg_event.get(key):
                         diff[key] = value
@@ -204,9 +190,18 @@ class Registry():
             if diff:
                 for source_name, event_id in reg_event['ids'].items():
                     source = self.sources[source_name]
-                    source.patch(event_id, diff)
+                    try:
+                        source.patch(event_id, diff)
+                    except source.http_exception as e:
+                        pass
+
 
                 reg_event.update(diff)
+
+            elif remotes['deleted']:
+                self.events[index] = None
+
+
 
     def sync(self):
         now = datetime.datetime.now().isoformat() + 'Z'
