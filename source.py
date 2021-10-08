@@ -1,4 +1,4 @@
-from pprint import pprint
+# from pprint import pprint
 import logging
 logger = logging.getLogger(__name__)
 
@@ -9,7 +9,6 @@ class Source():
     """
     Base class for database sources.
     """
-
 
     def __init__(self, name, id, token, keys={}):
         self.id = id
@@ -37,23 +36,7 @@ class Source():
 
             raise
 
-            # if status_code == 400:
-            #     # Bad request
-            #     raise e
-            # elif status_code == 404:
-            #     # Not found
-            #     status = 'not found'
-            # elif status_code == 410:
-            #     # Event deleted
-            #     status = 'deleted'
-            # else:
-            #     raise e
-
-        #     # response = {}
-        # else:
-        #     status = 'ok'
-
-        # logger.debug(response)
+        logger.debug(response)
 
         return response
 
@@ -148,7 +131,7 @@ class Source():
             'ids': {self.name: response['id']},
             'updated': response.get('updated'),
             'start': response.get('start'),
-            'end': reponse.get('end')
+            'end': response.get('end')
         }
 
     def _prepare_request(self, event):

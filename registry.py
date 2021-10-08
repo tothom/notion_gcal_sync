@@ -3,7 +3,7 @@ from .helpers import *
 
 import os
 import json
-from pprint import pprint
+# from pprint import pprint
 import datetime
 
 
@@ -118,7 +118,7 @@ class Registry():
         for event in self.events:
             logger.debug(f"{event=}")
 
-            if event == None:
+            if event is None:
                 deletions.append(event)
             # Remove old events from synchronisation...
             elif event['date']['start'] < self.time_min:
@@ -137,7 +137,7 @@ class Registry():
     def check_for_changes(self):
         logger.info("Checking registry for changes.")
 
-        event_deletions = []
+        # event_deletions = []
 
         for index, reg_event in enumerate(self.events):
             logger.info(f"Checking event {reg_event['title']}")
@@ -195,13 +195,10 @@ class Registry():
                     except source.http_exception as e:
                         pass
 
-
                 reg_event.update(diff)
 
             elif remotes['deleted']:
                 self.events[index] = None
-
-
 
     def sync(self):
         now = datetime.datetime.now().isoformat() + 'Z'

@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 import yaml
-from datetime import date, datetime, timedelta
+from datetime import date  # , datetime, timedelta
 import dateutil.parser
 import re
-import sys
+# import sys
 
 import logging
 
@@ -15,6 +15,7 @@ logging.basicConfig(
     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
+
 
 def nested_simple_namespace(d):
     simple_namespace = SimpleNamespace()
@@ -33,14 +34,17 @@ def load_config(file_name='config.yaml'):
 
     return config
 
+
 def create_config(file_name='config.yaml'):
     pass
+
 
 def parse_datetime_str(dt_str):
     if re.fullmatch('\d{4}-\d{2}-\d{2}', dt_str):
         return date.fromisoformat(dt_str)
     else:
         return dateutil.parser.parse(dt_str)
+
 
 def dict_diff(a, b):
     for key in b.keys():

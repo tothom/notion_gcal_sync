@@ -4,8 +4,8 @@ from .helpers import *
 
 
 import os
-from pprint import pprint
-import re
+# from pprint import pprint
+# import re
 import datetime  # import date, datetime, timedelta
 
 # Google imports
@@ -57,8 +57,6 @@ class GCal(Source):
 
         self.client = build('calendar', 'v3', credentials=self.creds)
 
-
-
     def _set_status_code(self, e):
         self.status_code = e.status_code
         # return e.status_code
@@ -85,7 +83,7 @@ class GCal(Source):
             end = response['end']['dateTime']
 
         if end == start:
-            end == None
+            end = None
 
         return {
             'title': response.get('summary', ''),
@@ -106,7 +104,7 @@ class GCal(Source):
             properties['description'] = event['description']
 
         if 'date' in event:
-            if event['date'] == None:
+            if event['date'] is None:
                 properties['status'] = 'cancelled'
 
             else:
@@ -115,7 +113,7 @@ class GCal(Source):
                 end = event['date']['end']
 
                 if start:
-                    if end == None:
+                    if end is None:
                         end = start
 
                     dt = parse_datetime_str(start)

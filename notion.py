@@ -2,11 +2,11 @@ from .source import Source
 # from .event import Event
 from .helpers import *
 
-import datetime
-import dateutil
-import os
-from pprint import pprint
-import re
+# import datetime
+# import dateutil
+# import os
+# from pprint import pprint
+# import re
 
 # Notion imports
 from notion_client import Client
@@ -55,7 +55,6 @@ class Notion(Source):
 
             date = {'start': start, 'end': end}
 
-
         return {
             'title': ', '.join([a.get('plain_text', '')
                                 for a in properties[self.keys['title']]['title']]),
@@ -70,10 +69,6 @@ class Notion(Source):
 
     def _prepare_request(self, event):
         properties = {}
-
-
-
-
 
         if 'title' in event:
             title = {
@@ -108,10 +103,10 @@ class Notion(Source):
 
             properties.update(description)
 
-        date = {}
+        # date = {}
 
         if 'date' in event:
-            if event['date'] == None:
+            if event['date'] is None:
                 pass
             else:
                 start = event['date'].get('start')
@@ -155,7 +150,7 @@ class Notion(Source):
             'filter': {
                 'property': self.keys['last_edited_time'],
                 'last_edited_time': {
-                    'on_or_after': updated_min
+                    'on_or_after': kwargs['updated_min']
                 }
             }
         }
